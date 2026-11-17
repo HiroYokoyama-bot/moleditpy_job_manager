@@ -603,7 +603,10 @@ class JobServerBackend:
         return "\n".join(result["text"].splitlines()[-lines:])
 
     def files(self, job):
-        return self.client.request("GET", f"/jobs/{job.remote_job_id}/files")
+        # Paths and sizes only: with digests the server reads every file of
+        # the job first, which for a large or running job can outlast the
+        # client's timeout. Downloads verify against their own X-SHA256.
+        return self.client.request("GET", f"/jobs/{job.remote_job_id}/files?digest=0")
 
     def list_path(self, path, depth=1):
         from .server_files import list_path
