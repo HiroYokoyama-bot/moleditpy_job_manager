@@ -84,6 +84,7 @@ from .models import (
     STATE_NEW,
     STATE_PENDING,
     STATE_HELD,
+    STATE_QUEUED,
     hold_reasons,
     STATE_SUBMITTED,
     STATE_UPLOADING,
@@ -985,14 +986,18 @@ class JobsDialog(QDialog):
         job = self.selected_job()
         if job is None:
             return
-        if self.model.display_state(job) in (
+        display = self.model.display_state(job)
+        # A Job Server job shown QUEUED has not started either; an SSH job
+        # shown QUEUED has a live wrapper to tail, so only the former joins
+        # the waiting set here.
+        if display in (
             STATE_NEW,
             STATE_UPLOADING,
             STATE_SUBMITTED,
             STATE_PENDING,
             STATE_HELD,
             STATE_BLOCKED,
-        ):
+        ) or (display == STATE_QUEUED and job.server_job_id):
             self._show_details()
             return
         if job.is_terminal and self.job_actions["open"].isEnabled():
@@ -1231,7 +1236,7 @@ class JobsDialog(QDialog):
             STATE_PENDING,
             STATE_HELD,
             STATE_BLOCKED,
-        ):
+        ) or (display_state == STATE_QUEUED and job.server_job_id):
             rows.insert(
                 4, ("Waiting", "This job has not started yet; its log and results may not exist.")
             )
