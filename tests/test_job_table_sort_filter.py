@@ -127,6 +127,46 @@ class TestFilteringByState(DialogTestCase):
         self.assertEqual(self.visible_names(), {"waiting", "chained"})
 
 
+class TestServerJobDisplayStates(DialogTestCase):
+    """A Job Server job that only a free slot holds back is QUEUED, as the
+    server calls it; a dependency wait stays a hold, with its reason."""
+
+    def setUp(self):
+        super().setUp()
+        self.dialog = JobsDialog(self.service)
+        self.addCleanup(self.dialog.deleteLater)
+
+    def display(self, job_id):
+        self.dialog.model.reload()
+        return self.dialog.model.display_state(self.store.jobs[job_id])
+
+    def test_a_server_job_waiting_for_a_slot_is_queued(self):
+        self.store.add_job(Job(id="a", name="plain", state=STATE_PENDING, server_job_id="srv-1"))
+        self.assertEqual(self.display("a"), "QUEUED")
+
+    def test_a_server_job_waiting_for_its_predecessor_is_held(self):
+        self.store.add_job(Job(id="p", name="first", state=STATE_RUNNING, server_job_id="srv-0"))
+        self.store.add_job(
+            Job(
+                id="b", name="chained", state=STATE_PENDING, server_job_id="srv-2", after_job_id="p"
+            )
+        )
+        self.assertEqual(self.display("b"), "HELD")
+
+    def test_a_server_job_whose_predecessor_finished_is_queued(self):
+        self.store.add_job(Job(id="p", name="first", state=STATE_DONE, server_job_id="srv-0"))
+        self.store.add_job(
+            Job(
+                id="b", name="chained", state=STATE_PENDING, server_job_id="srv-2", after_job_id="p"
+            )
+        )
+        self.assertEqual(self.display("b"), "QUEUED")
+
+    def test_a_local_pending_job_stays_pending(self):
+        self.store.add_job(Job(id="a", name="local", state=STATE_PENDING))
+        self.assertEqual(self.display("a"), "PENDING")
+
+
 class TestSortingTheTable(DialogTestCase):
     def setUp(self):
         super().setUp()

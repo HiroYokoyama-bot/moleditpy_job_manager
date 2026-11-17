@@ -254,11 +254,11 @@ class TestJobServerQueuePosition(DialogTestCase):
         self.addCleanup(monitor.deleteLater)
         model = monitor.model
         state = model.index(model.row_of(job.id), COLUMNS.index("State"))
-        assert model.data(state, Qt.ItemDataRole.DisplayRole) == "PENDING (3 ahead)"
+        assert model.data(state, Qt.ItemDataRole.DisplayRole) == "QUEUED (3 ahead)"
         assert "Queue position" in monitor._describe(job)
         job.server_queue_ahead = 0
         self.service.job_updated.emit(job.id)
-        assert model.data(state) == "PENDING (next in line)"
+        assert model.data(state) == "QUEUED (next in line)"
         job.state = "RUNNING"
         self.service.job_updated.emit(job.id)
         assert model.data(state) == "RUNNING"

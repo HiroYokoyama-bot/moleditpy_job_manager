@@ -142,6 +142,10 @@ class JobTableModel(QAbstractTableModel):
         A chained job the queue calls PENDING is either still waiting its turn
         or waiting for something that already failed, and those two deserve
         very different reactions from the user.
+
+        A Job Server job that only a free slot holds back is QUEUED, the
+        server's own word for it; a dependency wait still surfaces through
+        the hold reasons above, not here.
         """
         # The cached set, not chain_blocker: asked twice per row per repaint,
         # and chain_blocker walks the whole chain each time.
@@ -149,6 +153,10 @@ class JobTableModel(QAbstractTableModel):
             return STATE_BLOCKED
         if hold_reasons(job, self.service.store.jobs):
             return STATE_HELD
+        if job.state == STATE_PENDING and job.server_job_id:
+            predecessor = self.predecessor_of(job)
+            if predecessor is None or predecessor.is_terminal:
+                return STATE_QUEUED
         return job.state
 
     def predecessor_of(self, job: Job) -> Optional[Job]:
@@ -214,7 +222,7 @@ class JobTableModel(QAbstractTableModel):
                 suffix = " — " + " / ".join(reasons) if state == STATE_HELD and reasons else ""
                 if state == STATE_FAILED and job.rc is not None:
                     suffix = f" (rc={job.rc})"
-                elif state == STATE_PENDING and job.server_queue_ahead >= 0:
+                elif job.state == STATE_PENDING and job.server_queue_ahead >= 0:
                     suffix = f" ({queue_position(job.server_queue_ahead)})"
                 return f"{state}{suffix}"
             if column == "After":

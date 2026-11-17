@@ -144,7 +144,7 @@ def job_payload(job: Job, store: Any = None) -> Dict[str, Any]:
     data["elapsed_seconds"] = round(job.elapsed(), 3)
     data["waiting_seconds"] = round(job.waiting(), 3)
     if store is not None:
-        from .models import STATE_BLOCKED, STATE_HELD, hold_reasons
+        from .models import STATE_BLOCKED, STATE_HELD, STATE_PENDING, STATE_QUEUED, hold_reasons
 
         reasons = hold_reasons(job, store.jobs)
         data["hold_reasons"] = reasons
@@ -153,6 +153,12 @@ def job_payload(job: Job, store: Any = None) -> Dict[str, Any]:
         data["blocked_by"] = blocker.id if blocker is not None else ""
         if blocker is not None:
             data["display_state"] = STATE_BLOCKED
+        elif data["display_state"] == STATE_PENDING and job.server_job_id:
+            # The server's own words, as in the job table: QUEUED when only
+            # a free slot holds the job back.
+            predecessor = store.jobs.get(job.after_job_id) if job.after_job_id else None
+            if predecessor is None or predecessor.is_terminal:
+                data["display_state"] = STATE_QUEUED
     return data
 
 
