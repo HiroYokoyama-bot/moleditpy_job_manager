@@ -179,7 +179,7 @@ Tags are written in braces:
 | Tag | Expands to |
 |---|---|
 | `{input}` | the first input file's name |
-| `{1}` `{2}` ... | the file in that row of the input list, in order; `{1}` is the input named on the host when nothing is uploaded |
+| `{1}` `{2}` ... | the file in that row of the input list, in order; `{1}` is the same file as `{input}` (unless an input on the host is named under *Work already on the host*: then `{input}` is that file) |
 | `{all}` | every file in the list, in order, separated by spaces |
 | `{stem}` | that name without its extension |
 | `{output}` | `<stem>.out` |
