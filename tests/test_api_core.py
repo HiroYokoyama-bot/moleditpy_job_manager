@@ -180,6 +180,13 @@ class TestSubmission(ApiTestCase):
         self.assertEqual(preset.command_template, "mycommand {input} > {stem}.out")
         self.assertEqual(files, [self.input_path])
 
+    def test_a_retired_placeholder_spelling_is_a_400(self):
+        with self.assertRaises(ApiError) as caught:
+            self.post("/jobs", **self.submit_body(command="mycommand [input]"))
+        self.assertEqual(caught.exception.status, 400)
+        self.assertIn("{input}", caught.exception.message)
+        self.assertEqual(self.service.submitted, [])
+
     def test_a_host_can_be_named_rather_than_identified(self):
         self.post("/jobs", **self.submit_body(host=self.host.id))
         self.post("/jobs", **self.submit_body(host="MYCLUSTER"))

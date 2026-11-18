@@ -747,6 +747,24 @@ class TestSubmitDialog(DialogTestCase):
         self.dialog._refresh_preview()
         self.assertIn("prog b.gbw a.inp", self.dialog.txt_preview.toPlainText())
 
+    def test_a_retired_spelling_is_refused_with_its_replacement(self):
+        self.dialog.file_table.add_path(self.make_input("a.inp"))
+        self.dialog.txt_command.setText("prog [input]")
+        with patch("job_manager.submit_dialog.QMessageBox.warning") as warn:
+            self.dialog._submit()
+        warn.assert_called_once()
+        self.assertIn("[input] -> {input}", warn.call_args.args[2])
+        self.assertEqual(self.store.jobs, {})
+
+    def test_placeholder_help_is_offered_in_the_template_list(self):
+        combo = self.dialog.cmb_template
+        index = combo.findText("Placeholder help...")
+        self.assertGreaterEqual(index, 0)
+        with patch("job_manager.template_editor_dialog.show_placeholder_help") as show:
+            self.dialog._on_template_chosen(index)
+        show.assert_called_once()
+        self.assertEqual(combo.currentIndex(), 0)
+
     def test_a_number_past_the_list_is_refused(self):
         self.dialog.file_table.add_path(self.make_input("a.inp"))
         self.dialog.txt_command.setText("prog {1} {2}")
@@ -1659,18 +1677,18 @@ class TestCommandTemplateDropdown(DialogTestCase):
 
     def test_the_command_stays_editable(self):
         self.choose("ORCA")
-        self.dialog.txt_command.setText("my own command [input]")
-        self.assertEqual(self.dialog.collect_preset().command_template, "my own command [input]")
+        self.dialog.txt_command.setText("my own command {input}")
+        self.assertEqual(self.dialog.collect_preset().command_template, "my own command {input}")
 
     def test_saved_templates_appear_and_can_be_chosen(self):
-        self.store.add_user_template("My VASP", "srun vasp_std > [output]")
+        self.store.add_user_template("My VASP", "srun vasp_std > {output}")
         self.dialog._reload_templates()
         self.assertIn("My VASP", self.labels())
         self.choose("My VASP")
-        self.assertEqual(self.dialog.txt_command.text(), "srun vasp_std > [output]")
+        self.assertEqual(self.dialog.txt_command.text(), "srun vasp_std > {output}")
 
     def test_saving_the_current_command(self):
-        self.dialog.txt_command.setText("orca [input] > [output]")
+        self.dialog.txt_command.setText("orca {input} > {output}")
         with patch(
             "job_manager.submission_templates.QInputDialog.getText", return_value=("Mine", True)
         ):
@@ -1678,7 +1696,7 @@ class TestCommandTemplateDropdown(DialogTestCase):
         templates = JobStore(self.tmp).user_templates()
         self.assertEqual(len(templates), 1)
         self.assertEqual(templates[0]["label"], "Mine")
-        self.assertEqual(templates[0]["command"], "orca [input] > [output]")
+        self.assertEqual(templates[0]["command"], "orca {input} > {output}")
 
     def test_saving_an_empty_command_is_refused(self):
         self.dialog.txt_command.setText("   ")
@@ -1707,9 +1725,9 @@ class TestCommandTemplateDropdown(DialogTestCase):
         self.assertIn("nwchem", self.dialog.txt_command.text())
 
     def test_prefill_never_overwrites_a_command_the_user_already_has(self):
-        self.dialog.txt_command.setText("keep me [input]")
+        self.dialog.txt_command.setText("keep me {input}")
         self.dialog.prefill(files=[self.make_input("mol.nw")], name="p")
-        self.assertEqual(self.dialog.txt_command.text(), "keep me [input]")
+        self.assertEqual(self.dialog.txt_command.text(), "keep me {input}")
 
     def test_an_ambiguous_extension_leaves_the_command_empty(self):
         # .inp belongs to ORCA, CP2K and GAMESS alike.

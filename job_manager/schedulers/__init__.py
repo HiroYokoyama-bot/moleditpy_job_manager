@@ -16,6 +16,7 @@ from .base import (
     get_scheduler,
     parse_memory_mb,
     numbered_file_tags,
+    retired_tags_message,
     references_input,
     register,
     requested_cores,
@@ -46,6 +47,7 @@ __all__ = [
     "format_command",
     "get_scheduler",
     "numbered_file_tags",
+    "retired_tags_message",
     "references_input",
     "register",
 ]

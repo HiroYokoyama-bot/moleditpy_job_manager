@@ -8,7 +8,13 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QInputDialog, QMessageBox
 
 from .command_templates import CommandTemplate, extension_of, suggest, templates_for
-from .submission_config import _DELETE_TEMPLATE, _MANAGE_TEMPLATES, _SAVE_TEMPLATE, _SET_DEFAULT
+from .submission_config import (
+    _DELETE_TEMPLATE,
+    _MANAGE_TEMPLATES,
+    _PLACEHOLDER_HELP,
+    _SAVE_TEMPLATE,
+    _SET_DEFAULT,
+)
 
 
 class SubmissionTemplates:
@@ -65,6 +71,7 @@ class SubmissionTemplates:
         if saved:
             self.cmb_template.addItem("Delete a saved template...", _DELETE_TEMPLATE)
         self.cmb_template.addItem("Manage templates...", _MANAGE_TEMPLATES)
+        self.cmb_template.addItem("Placeholder help...", _PLACEHOLDER_HELP)
         self.cmb_template.blockSignals(False)
 
     def _on_template_chosen(self, index: int) -> None:
@@ -78,6 +85,10 @@ class SubmissionTemplates:
             self._delete_user_template()
         elif choice is _MANAGE_TEMPLATES:
             self._manage_templates()
+        elif choice is _PLACEHOLDER_HELP:
+            from .template_editor_dialog import show_placeholder_help
+
+            show_placeholder_help(self.parent)
         elif choice is not None:
             self.txt_command.setText(choice.command)
             self._apply_template_globs(choice)

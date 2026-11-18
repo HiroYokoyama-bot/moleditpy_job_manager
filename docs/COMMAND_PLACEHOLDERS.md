@@ -16,8 +16,8 @@ template, and a per-extension default.
 |--------------|-----------------------------------------------------------------|
 | `{input}`    | The uploaded file's name, e.g. `water.inp`                     |
 | `{stem}`     | `{input}` without its extension, e.g. `water`                  |
-| `{basename}` | Same as `{stem}`, kept for templates written before it existed |
 | `{1}` `{2}` ... | The file in that row of the input list (rows are numbered there) |
+| `{all}`      | Every file in the list, in order, separated by spaces            |
 | `{name}`     | The job's display name                                         |
 | `{jobdir}`   | The job's directory on the host                                |
 | `{nodes}`    | The preset's node count                                        |

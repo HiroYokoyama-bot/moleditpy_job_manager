@@ -252,10 +252,13 @@ class TestTheNewPlaceholders(unittest.TestCase):
         )
         self.assertEqual(command, "tar czf sweep.tar.gz ~/runs/mol42")
 
-    def test_the_square_spelling_works_too(self):
-        self.assertEqual(
-            format_command("echo [name]", "", SubmitPreset(), "sweep", ""), "echo sweep"
-        )
+    def test_retired_spellings_are_reported_with_their_replacement(self):
+        from job_manager.schedulers.base import retired_tags_message
+
+        message = retired_tags_message("g16 [input] && cp {basename} /tmp")
+        self.assertIn("[input] -> {input}", message)
+        self.assertIn("{basename} -> {input}", message)
+        self.assertEqual(retired_tags_message("g16 {input}"), "")
 
     def test_they_reach_the_script(self):
         script = get_scheduler("slurm").build_script(
@@ -275,8 +278,8 @@ class TestSpottingACommandThatNeedsAnInput(unittest.TestCase):
     def test_the_input_tags(self):
         for template in (
             "orca {input} > {stem}.out",
-            "g16 [input]",
-            "cp {basename} /tmp",
+            "g16 {1}",
+            "cat {all}",
             "prog > {output}",
         ):
             self.assertTrue(references_input(template), template)

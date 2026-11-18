@@ -50,6 +50,7 @@ from .schedulers import (
     get_scheduler,
     numbered_file_tags,
     references_input,
+    retired_tags_message,
     requested_cores,
     requested_memory_mb,
     submit_arguments,
@@ -1572,6 +1573,10 @@ class SubmitDialog(QDialog):
             QMessageBox.warning(
                 self, "Submit", "Enter the directory on the host, or untick the box."
             )
+            return
+        retired = retired_tags_message(preset.command_template)
+        if retired:
+            QMessageBox.warning(self, "Submit", retired)
             return
         if not files and not self.remote_input() and references_input(preset.command_template):
             # Would substitute to `orca  > .out` and fail on the host; caught

@@ -548,7 +548,7 @@ class SubmitPreset:
     memory: str = ""
     modules: List[str] = field(default_factory=list)
     pre_commands: List[str] = field(default_factory=list)
-    #: {input} / {basename} / {stem} are substituted at submit time.
+    #: {input} / {stem} / {1} ... are substituted at submit time.
     command_template: str = "orca {input} > {stem}.out"
     fetch_globs: List[str] = field(
         default_factory=lambda: ["*.out", "*.log", "*.xyz", "*.hess", "*.fchk"]

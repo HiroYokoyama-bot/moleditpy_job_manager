@@ -35,6 +35,15 @@ class TestNumberedFilePlaceholders(unittest.TestCase):
         text = format_command("prog {3}", "a.inp", self.preset, input_files=["a.inp"])
         self.assertEqual(text, "prog {3}")
 
+    def test_all_lists_every_file_in_order(self):
+        text = format_command(
+            "cat {all}", "a.inp", self.preset, input_files=["a.inp", "b.xyz", "c.txt"]
+        )
+        self.assertEqual(text, "cat a.inp b.xyz c.txt")
+
+    def test_all_is_the_named_input_when_nothing_is_uploaded(self):
+        self.assertEqual(format_command("cat {all}", "x.inp", self.preset), "cat x.inp")
+
     def test_tags_used_are_reported_without_shell_parameters(self):
         self.assertEqual(numbered_file_tags("a {2} ${3} {10} {1}"), [1, 2, 10])
 

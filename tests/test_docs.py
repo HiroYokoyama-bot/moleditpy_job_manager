@@ -130,10 +130,10 @@ class TestDocumentedTemplates(unittest.TestCase):
         for tag in placeholder_values("mol.inp", SubmitPreset()):
             self.assertIn(tag, text, tag)
 
-    def test_both_spellings_are_documented(self):
+    def test_the_retired_spellings_are_explained(self):
         text = read(DOCS / "WORKFLOW.md")
         self.assertIn("{input}", text)
-        self.assertIn("[input]", text)
+        self.assertIn("`[input]`-style tags and `{basename}`", text)
 
 
 class TestDocumentedChainingAndScheduling(unittest.TestCase):

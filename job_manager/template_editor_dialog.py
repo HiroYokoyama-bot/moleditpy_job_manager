@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -39,13 +40,43 @@ PLACEHOLDER_TIP = (
     "Placeholders substituted at submit time:\n"
     "  {input}     the uploaded file's name, e.g. water.inp\n"
     "  {stem}      the same, without its extension, e.g. water\n"
-    "  {basename}  input file name including its extension\n"
+    "  {output}    {stem}.out\n"
     "  {1} {2} ... the files in the input list, by their number there\n"
+    "  {all}       every file in the list, in order, separated by spaces\n"
     "  {name}      the job's display name\n"
     "  {jobdir}    the job's directory on the host\n"
     "  {nodes} {ntasks} {cpus} {memory} {queue} {walltime}\n"
     "              the preset's resource request"
 )
+
+PLACEHOLDER_NOTES = (
+    "${1} stays the shell's own parameter, not a file. A number past the end of the\n"
+    "list is refused at submit, and in a batch each job has only {1}.\n"
+    "Unknown tags are left as written. Nothing is quoted for you:\n"
+    'write cd "{jobdir}" where a value may contain spaces.'
+)
+
+
+def show_placeholder_help(parent: Optional[QWidget] = None) -> None:
+    """The placeholder list in a window of its own, in a fixed font so the
+    columns line up -- a tooltip vanishes the moment the mouse moves."""
+    from PySide6.QtGui import QFontDatabase
+
+    dialog = QDialog(parent)
+    dialog.setWindowTitle(f"Job Manager {PLUGIN_VERSION} - Command Placeholders")
+    apply_theme(dialog)
+    layout = QVBoxLayout(dialog)
+    text = QPlainTextEdit(PLACEHOLDER_TIP + "\n\n" + PLACEHOLDER_NOTES)
+    text.setReadOnly(True)
+    text.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
+    text.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+    layout.addWidget(text)
+    buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+    buttons.rejected.connect(dialog.reject)
+    layout.addWidget(buttons)
+    dialog.resize(640, 420)
+    dialog.exec()
+
 
 EXT_ROLE = Qt.ItemDataRole.UserRole
 CMD_ROLE = Qt.ItemDataRole.UserRole + 1

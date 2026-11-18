@@ -11,6 +11,7 @@ from typing import Any, List, Mapping, Optional
 from .api_types import PRESET_FIELDS, ApiError
 from .input_names import check_input_name
 from .models import HostProfile, Job, SubmitPreset, validate_priority
+from .schedulers.base import retired_tags_message
 
 
 class ApiInputs:
@@ -138,6 +139,9 @@ class ApiInputs:
                 setattr(preset, key, self._coerce(body[key], key, kind))
         if not preset.command_template.strip():
             raise ApiError(400, "The command line is empty")
+        retired = retired_tags_message(preset.command_template)
+        if retired:
+            raise ApiError(400, retired)
         try:
             validate_priority(preset.priority)
         except ValueError as exc:

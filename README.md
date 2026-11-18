@@ -108,9 +108,9 @@ Templates cover ORCA, Gaussian, CP2K, GAMESS, MOPAC, NWChem, Psi4, PySCF,
 Quantum ESPRESSO, VASP and xTB. Use the full executable path when needed,
 especially for ORCA: a bare `orca` can resolve to the Linux screen reader.
 
-Placeholders accept either `{input}` or `[input]`. Available fields include
-`input`, `stem`, `basename`, `output`, `nodes`, `ntasks`, `cpus`, `memory`,
-`walltime` and `queue`. Save custom commands through **Template... → Save
+Placeholders are written in braces, e.g. `{input}`. Available fields include
+`input`, `stem`, `output`, `1` `2` ... (the input files in order), `all`,
+`nodes`, `ntasks`, `cpus`, `memory`, `walltime` and `queue`. Save custom commands through **Template... → Save
 current command as...**.
 
 The input table shows **File**, **Folder** and **Status**. Add or paste paths,

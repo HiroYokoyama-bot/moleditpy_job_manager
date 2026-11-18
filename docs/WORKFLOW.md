@@ -77,7 +77,7 @@ extensions are deliberately not claimed application-wide, since that would take
 **New Job...** collects four things:
 
 1. **Host and preset.** A preset is a reusable resource request for one host.
-2. **Input files.** The *first* one is what `[input]` expands to; the rest ride
+2. **Input files.** The *first* one is what `{input}` expands to; the rest ride
    along into the same remote directory (basis sets, restart files, POTCAR...).
    Each row is numbered on the left, and `{1}`, `{2}`, ... in the command name
    the file in that row.
@@ -174,17 +174,17 @@ to read exactly that.
 
 ### Placeholders
 
-Both spellings work, so you never have to fight the shell:
+Tags are written in braces:
 
 | Tag | Expands to |
 |---|---|
-| `{input}` / `[input]` | the first input file's name |
-| `{basename}` | the same thing, spelled differently |
+| `{input}` | the first input file's name |
 | `{1}` `{2}` ... | the file in that row of the input list, in order; `{1}` is the input named on the host when nothing is uploaded |
-| `{stem}` / `[stem]` | that name without its extension |
-| `{output}` / `[output]` | `<stem>.out` |
-| `{name}` / `[name]` | the job name, reduced to safe characters (`opt run` → `opt_run`) |
-| `{jobdir}` / `[jobdir]` | the directory on the host the job runs in |
+| `{all}` | every file in the list, in order, separated by spaces |
+| `{stem}` | that name without its extension |
+| `{output}` | `<stem>.out` |
+| `{name}` | the job name, reduced to safe characters (`opt run` → `opt_run`) |
+| `{jobdir}` | the directory on the host the job runs in |
 | `{ntasks}` `{nodes}` `{cpus}` | the resource fields |
 | `{cpus_per_task}` | a longer spelling of `{cpus}` |
 | `{memory}` `{walltime}` `{queue}` | likewise |
@@ -194,13 +194,16 @@ Unknown tags are left verbatim, and shell syntax that merely looks like a tag �
 quoted for you, so quote the tag yourself where the value may contain spaces:
 `cd "{jobdir}"`.
 
-Numbered files take braces only: `${1}` stays the shell's positional parameter
-and `[1]` an array index. A `{3}` with only two files in the list is refused at
+`${1}` stays the shell's positional parameter rather than a file. A `{3}` with only two files in the list is refused at
 submit, and in a batch each job has just its own file, `{1}`.
 
-A command that names an input — `{input}`, `{basename}`, `{stem}`, `{output}`,
-`{1}` — is refused for a job that has none, rather than submitted as `orca  > .out` for
+A command that names an input — `{input}`, `{stem}`, `{output}`, `{1}`,
+`{all}` — is refused for a job that has none, rather than submitted as `orca  > .out` for
 you to find in tomorrow's log.
+
+Older versions also accepted `[input]`-style tags and `{basename}` (the same as
+`{input}`). Both are gone; a saved command that still uses one is refused at
+submit with the brace spelling to use instead.
 
 ### Reusing a finished job's file
 

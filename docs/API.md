@@ -346,7 +346,7 @@ somebody's input by accident is worse than an error.
 |---|---|
 | `host` | Host id, or its name as shown in the Hosts dialog |
 | `files` | Local input files to upload; the first is what `{input}` names |
-| `command` | The command line. `{input}`, `{stem}`, `{basename}` are substituted |
+| `command` | The command line. `{input}`, `{stem}`, `{1}` `{2}` ..., `{all}` are substituted |
 | `preset` | A saved preset on that host, by name or id, instead of the fields below |
 | `name` | Job name; defaults to the input's filename |
 | `queue`, `account`, `walltime` | Passed to the scheduler |
