@@ -61,4 +61,4 @@ class TestWaitingJobDoubleClick(DialogTestCase):
             == actions.index(dialog.job_actions["tail"]) + 1
         )
         assert dialog.btn_tail_file.defaultAction() is dialog.job_actions["tail_file"]
-        assert dialog.btn_tail_file.text() == "Tail File…"
+        assert dialog.btn_tail_file.text() == "Tail File..."

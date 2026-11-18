@@ -29,6 +29,7 @@ from .models import (
 )
 from .schedulers import available_schedulers
 from .store import MAX_POLL_INTERVAL, MIN_POLL_INTERVAL
+from .window_utils import shell_editor
 
 EQUAL_PATH_TIP = (
     "Set this when the host's filesystem is also reachable from this "
@@ -251,10 +252,10 @@ class HostProfileForm(QWidget):
         self.adv_form = adv
         self.txt_login = QPlainTextEdit()
         self.txt_login.setPlaceholderText("source /etc/profile\nmodule purge")
-        self.txt_login.setMaximumHeight(70)
+        shell_editor(self.txt_login)
         self.txt_options = QPlainTextEdit()
         self.txt_options.setPlaceholderText("StrictHostKeyChecking=yes\nServerAliveInterval=30")
-        self.txt_options.setMaximumHeight(70)
+        shell_editor(self.txt_options)
         self.spin_connect_timeout = QSpinBox()
         self.spin_connect_timeout.setRange(5, 300)
         self.spin_connect_timeout.setSuffix(" s")

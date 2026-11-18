@@ -8,6 +8,7 @@ import os
 from typing import ClassVar, List, Optional, Sequence
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QFontDatabase
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -47,6 +48,7 @@ from .runner import make_remote_dir
 from .schedulers import (
     format_command,
     get_scheduler,
+    numbered_file_tags,
     references_input,
     requested_cores,
     requested_memory_mb,
@@ -109,6 +111,23 @@ from .submission_templates import SubmissionTemplates
 from .theme import apply_theme
 from .window_utils import accept_drop_as_copy, make_independent, set_spin_value
 from .wheel_guard import install_wheel_guard
+
+
+#: Example Modules / Pre-commands / Extra directives per scheduler, so that
+#: the hint is in the language the job script is actually written in.
+_MODULES_EXAMPLE = "orca/5.0.4\nopenmpi/4.1.1"
+
+_SHELL_PLACEHOLDERS = {
+    "slurm": (
+        _MODULES_EXAMPLE,
+        "export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK",
+        "#SBATCH --exclusive",
+    ),
+    "pbs": (_MODULES_EXAMPLE, "export OMP_NUM_THREADS=$NCPUS", "#PBS -l place=excl"),
+    "sge": (_MODULES_EXAMPLE, "export OMP_NUM_THREADS=$NSLOTS", "#$ -l h_vmem=4G"),
+    "shell": (_MODULES_EXAMPLE, "export OMP_NUM_THREADS=8", ""),
+    "windows": ("", "$env:OMP_NUM_THREADS = 8", ""),
+}
 
 
 class SubmitDialog(QDialog):
@@ -636,12 +655,16 @@ class SubmitDialog(QDialog):
         page = QWidget()
         layout = QVBoxLayout(page)
         self.lbl_preview_hint = QLabel(
-            "This exact script is uploaded and submitted. The trailing sentinel is how "
-            "the plugin detects completion."
+            "This exact script is uploaded and submitted. However it ends, it writes "
+            "its exit code to a file, which is how the plugin detects completion."
         )
         self.lbl_preview_hint.setWordWrap(True)
         self.txt_preview = QPlainTextEdit()
         self.txt_preview.setReadOnly(True)
+        # As the Details dialog shows it: a script reads by its columns, and a
+        # wrapped trap line looks like two commands.
+        self.txt_preview.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
+        self.txt_preview.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self.lbl_submit_line = QLabel("")
         self.lbl_submit_line.setWordWrap(True)
         self.lbl_submit_line.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -702,6 +725,10 @@ class SubmitDialog(QDialog):
         except ValueError:
             scheduler = None
         live = scheduler is None or scheduler.queue_directives
+        reason = (
+            f"{scheduler.label if scheduler else 'This host'} has no queue to read it. "
+            "Cores and memory still matter."
+        )
         for widget in (
             self.txt_queue,
             self.txt_account,
@@ -711,11 +738,33 @@ class SubmitDialog(QDialog):
             self.txt_submit_options,
         ):
             widget.setEnabled(live)
-            if not live:
-                widget.setToolTip(
-                    f"{scheduler.label if scheduler else 'This host'} has no queue to read it. "
-                    "Cores and memory still matter."
-                )
+            self._set_reason_tooltip(widget, "" if live else reason)
+        # A PowerShell job script has no module command: Modules would only be
+        # written into it as comments.
+        windows = bool(scheduler and scheduler.name == "windows")
+        self.txt_modules.setEnabled(not windows)
+        self._set_reason_tooltip(
+            self.txt_modules,
+            "Windows hosts have no module command; put setup in Pre-commands." if windows else "",
+        )
+        name = scheduler.name if scheduler else ""
+        modules, pre, extra = _SHELL_PLACEHOLDERS.get(name, _SHELL_PLACEHOLDERS["slurm"])
+        self.txt_modules.setPlaceholderText(modules)
+        self.txt_pre.setPlaceholderText(pre)
+        self.txt_extra.setPlaceholderText(extra)
+
+    @staticmethod
+    def _set_reason_tooltip(widget, reason: str) -> None:
+        """Show ``reason`` while it applies, and the widget's own tooltip after.
+
+        The own tooltip is kept on first use: replacing it outright left a
+        SLURM host saying "has no queue" once a queue-less host had been picked.
+        """
+        own = widget.property("_own_tooltip")
+        if own is None:
+            own = widget.toolTip()
+            widget.setProperty("_own_tooltip", own)
+        widget.setToolTip(reason or own)
 
     #: How each scheduler is told to wait, for the hint under the checkbox.
     _CHAIN_MECHANISM: ClassVar[dict] = {
@@ -723,6 +772,7 @@ class SubmitDialog(QDialog):
         "pbs": "-W depend=afterok",
         "sge": "-hold_jid",
         "shell": "the wrapper waits for its process",
+        "windows": "the wrapper waits for its process",
     }
 
     def slot_limit(self) -> int:
@@ -1286,8 +1336,8 @@ class SubmitDialog(QDialog):
             )
         else:
             self.lbl_preview_hint.setText(
-                "This exact script is uploaded and submitted. The trailing "
-                "sentinel is how the plugin detects completion."
+                "This exact script is uploaded and submitted. However it ends, it writes "
+                "its exit code to a file, which is how the plugin detects completion."
             )
         input_name = self.remote_input() or (os.path.basename(files[0]) if files else "")
         if not input_name and not self.remote_dir():
@@ -1317,11 +1367,17 @@ class SubmitDialog(QDialog):
             start_after=self.selected_start_time(),
             remote_dir=remote_dir,
             preamble=host.environment_commands(),
+            input_files=self._numbered_names(files),
         )
         self.txt_preview.setPlainText(script)
         self.lbl_submit_line.setText(
             self._submit_line(host, scheduler, preset, input_name, name, remote_dir)
         )
+
+    def _numbered_names(self, files: Sequence[str]) -> List[str]:
+        """What {1}, {2}, ... stand for: the list in order, or each batch job's own file."""
+        names = [os.path.basename(path) for path in files]
+        return names[:1] if self._batch_active() else names
 
     def _submit_line(
         self,
@@ -1342,7 +1398,12 @@ class SubmitDialog(QDialog):
                 host.submit_options,
                 preset.submit_options,
                 substitute=lambda word: format_command(
-                    word, input_name, preset, sanitize_name(name), remote_dir
+                    word,
+                    input_name,
+                    preset,
+                    sanitize_name(name),
+                    remote_dir,
+                    self._numbered_names(self.selected_files()),
                 ),
             )
         except ValueError as exc:
@@ -1535,6 +1596,22 @@ class SubmitDialog(QDialog):
             if confirm != QMessageBox.StandardButton.Yes:
                 return
         batch = self._batch_active() and len(files) > 1
+        numbered = numbered_file_tags(preset.command_template)
+        available = 1 if batch else (len(files) or (1 if self.remote_input() else 0))
+        if numbered and numbered[-1] > available:
+            # Left as written, {3} would reach the host as a literal and the
+            # program would be handed a file called "{3}".
+            QMessageBox.warning(
+                self,
+                "Submit",
+                f"The command uses {{{numbered[-1]}}}, but "
+                + (
+                    "each job in a batch has only its own file, {1}."
+                    if batch
+                    else f"the file list has {available} file(s)."
+                ),
+            )
+            return
         try:
             if not batch:
                 check_upload_names(files, windows=host.scheduler == SCHEDULER_WINDOWS)

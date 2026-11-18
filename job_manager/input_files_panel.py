@@ -30,7 +30,9 @@ class InputFilesPanel(QGroupBox):
             "Optional. With none, the command runs on its own in a new directory on the host."
         )
         files_layout = QVBoxLayout(self)
-        files_note = QLabel("Optional. The first one is passed to the command as {input}.")
+        files_note = QLabel(
+            "Optional. The first one is {input}; use {1}, {2}, ... for the numbered rows."
+        )
         files_note.setWordWrap(True)
         files_note.setStyleSheet("color: palette(mid);")
         files_note.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)

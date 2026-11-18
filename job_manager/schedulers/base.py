@@ -166,7 +166,11 @@ _SQUARE_RE = re.compile(r"\[(\w+)\]")
 
 
 def placeholder_values(
-    input_name: str, preset: SubmitPreset, job_name: str = "", remote_dir: str = ""
+    input_name: str,
+    preset: SubmitPreset,
+    job_name: str = "",
+    remote_dir: str = "",
+    input_files: Sequence[str] = (),
 ) -> Dict[str, str]:
     """Every tag a command template may use, resolved for this job.
 
@@ -175,7 +179,14 @@ def placeholder_values(
     host names it, rather than a file this plugin uploaded.
     """
     stem = posixpath.splitext(input_name)[0] if input_name else ""
+    # {1}, {2}, ... are the uploaded files in list order. With nothing
+    # uploaded, {1} is the input named on the host.
+    numbered = {
+        str(index): posixpath.basename(name.replace("\\", "/"))
+        for index, name in enumerate(input_files or ([input_name] if input_name else []), 1)
+    }
     return {
+        **numbered,
         "input": input_name,
         "basename": input_name,
         "stem": stem,
@@ -196,6 +207,21 @@ def placeholder_values(
 _INPUT_TAGS = frozenset({"input", "basename", "stem", "output"})
 
 
+def numbered_file_tags(template: str) -> List[int]:
+    """The ``{N}`` file numbers a command uses, ``${N}`` shell parameters aside."""
+    return sorted(
+        {
+            int(match.group(1))
+            for match in _BRACE_RE.finditer(template or "")
+            if match.group(1).isdigit() and not _after_dollar(match)
+        }
+    )
+
+
+def _after_dollar(match: "re.Match[str]") -> bool:
+    return match.start() > 0 and match.string[match.start() - 1] == "$"
+
+
 def references_input(template: str) -> bool:
     """True if this command cannot run without an input file name.
 
@@ -205,7 +231,7 @@ def references_input(template: str) -> bool:
     """
     text = template or ""
     tags = set(_BRACE_RE.findall(text)) | set(_SQUARE_RE.findall(text))
-    return bool(tags & _INPUT_TAGS)
+    return bool(tags & _INPUT_TAGS) or bool(numbered_file_tags(text))
 
 
 def format_command(
@@ -214,6 +240,7 @@ def format_command(
     preset: SubmitPreset,
     job_name: str = "",
     remote_dir: str = "",
+    input_files: Sequence[str] = (),
 ) -> str:
     """Substitute the placeholders a command template may use.
 
@@ -222,10 +249,14 @@ def format_command(
     ``awk '{print $1}'``, ``if [ -f x ]`` -- made format() raise, and the old
     fallback then ran the template with nothing substituted at all.
     """
-    values = placeholder_values(input_name, preset, job_name, remote_dir)
+    values = placeholder_values(input_name, preset, job_name, remote_dir, input_files)
 
     def replace(match: "re.Match[str]") -> str:
         key = match.group(1)
+        if key.isdigit() and (_after_dollar(match) or match.re is _SQUARE_RE):
+            # ${1} is the shell's own positional parameter and [1] an array
+            # index: numbered files are spelled {1} only.
+            return match.group(0)
         return str(values[key]) if key in values else match.group(0)
 
     text = _BRACE_RE.sub(replace, template or "")
@@ -286,6 +317,7 @@ class Scheduler(ABC):
         preamble: Sequence[str] = (),
         relay_lines: Sequence[str] = (),
         start_time_text: str = "",
+        input_files: Sequence[str] = (),
     ) -> str:
         """Assemble the complete run script, sentinel included.
 
@@ -388,7 +420,9 @@ class Scheduler(ABC):
                 lines.append(command.strip())
         lines += [
             "",
-            format_command(preset.command_template, input_name, preset, job_name, remote_dir),
+            format_command(
+                preset.command_template, input_name, preset, job_name, remote_dir, input_files
+            ),
             "",
         ]
         return "\n".join(lines)

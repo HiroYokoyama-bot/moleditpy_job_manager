@@ -337,7 +337,12 @@ def submit_job(
     extra_args = submit_arguments(
         *options,
         substitute=lambda word: format_command(
-            word, input_name, preset, sanitize_name(job.name), job.remote_dir
+            word,
+            input_name,
+            preset,
+            sanitize_name(job.name),
+            job.remote_dir,
+            [os.path.basename(path) for path in local_files],
         ),
     )
 
@@ -361,6 +366,7 @@ def submit_job(
         sentinel=sentinel_for(job),
         preamble=host.environment_commands(),
         relay_lines=relay_lines,
+        input_files=[os.path.basename(path) for path in local_files],
         **schedule_options,
     )
     job.command = script
@@ -479,6 +485,7 @@ def submit_to_runner(
         sentinel=sentinel_for(job),
         preamble=host.environment_commands(),
         relay_lines=relay_lines,
+        input_files=[os.path.basename(path) for path in local_files],
     )
     job.command = script
     # Not `script_name`: that name belongs to the runner's own script below.

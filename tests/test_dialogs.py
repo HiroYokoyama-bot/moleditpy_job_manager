@@ -688,6 +688,74 @@ class TestSubmitDialog(DialogTestCase):
         self.assertEqual(self.dialog.cmb_host.count(), 1)
         self.assertIs(self.dialog.current_host(), self.host)
 
+    def _pick(self, host):
+        self.store.add_host(host)
+        self.dialog._reload_hosts()
+        self.dialog.cmb_host.setCurrentIndex(self.dialog.cmb_host.findData(host.id))
+
+    def test_queue_tooltips_come_back_after_a_queueless_host(self):
+        own = self.dialog.txt_submit_options.toolTip()
+        self._pick(make_host(id="h-local", name="aaa", scheduler="shell"))
+        self.assertIn("no queue", self.dialog.txt_queue.toolTip())
+        self.assertIn("no queue", self.dialog.txt_submit_options.toolTip())
+        self.dialog.cmb_host.setCurrentIndex(self.dialog.cmb_host.findData(self.host.id))
+        self.assertNotIn("no queue", self.dialog.txt_queue.toolTip())
+        self.assertEqual(self.dialog.txt_submit_options.toolTip(), own)
+
+    def test_placeholders_follow_the_scheduler(self):
+        self.assertIn("#SBATCH", self.dialog.txt_extra.placeholderText())
+        self._pick(make_host(id="h-pbs", name="aaa", scheduler="pbs"))
+        self.assertIn("#PBS", self.dialog.txt_extra.placeholderText())
+        self.assertNotIn("SLURM", self.dialog.txt_pre.placeholderText())
+
+    def test_windows_hosts_grey_modules_and_speak_powershell(self):
+        self._pick(make_host(id="h-win", name="aaa", scheduler="windows"))
+        self.assertFalse(self.dialog.txt_modules.isEnabled())
+        self.assertIn("module", self.dialog.txt_modules.toolTip())
+        self.assertIn("$env:", self.dialog.txt_pre.placeholderText())
+        self.dialog.cmb_host.setCurrentIndex(self.dialog.cmb_host.findData(self.host.id))
+        self.assertTrue(self.dialog.txt_modules.isEnabled())
+        self.assertEqual(self.dialog.txt_modules.toolTip(), "")
+
+    @staticmethod
+    def _fixed_family():
+        # The family, not fontInfo().fixedPitch(): offscreen Qt has no
+        # fixed-pitch font to resolve to.
+        from PySide6.QtGui import QFontDatabase
+
+        return QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont).family()
+
+    def test_shell_boxes_show_several_lines_in_a_fixed_font(self):
+        for editor in (self.dialog.txt_modules, self.dialog.txt_pre, self.dialog.txt_extra):
+            self.assertEqual(editor.font().family(), self._fixed_family())
+            self.assertGreaterEqual(editor.height(), 3 * editor.fontMetrics().lineSpacing())
+
+    def test_the_preview_is_fixed_width_and_unwrapped(self):
+        from PySide6.QtWidgets import QPlainTextEdit
+
+        self.assertEqual(self.dialog.txt_preview.font().family(), self._fixed_family())
+        self.assertEqual(self.dialog.txt_preview.lineWrapMode(), QPlainTextEdit.LineWrapMode.NoWrap)
+        self.assertNotIn("trailing", self.dialog.lbl_preview_hint.text())
+
+    def test_file_rows_are_numbered_for_the_command(self):
+        self.assertFalse(self.dialog.file_table.verticalHeader().isHidden())
+
+    def test_numbered_files_reach_the_preview(self):
+        self.dialog.file_table.add_path(self.make_input("a.inp"))
+        self.dialog.file_table.add_path(self.make_input("b.gbw"))
+        self.dialog.txt_command.setText("prog {2} {1}")
+        self.dialog._refresh_preview()
+        self.assertIn("prog b.gbw a.inp", self.dialog.txt_preview.toPlainText())
+
+    def test_a_number_past_the_list_is_refused(self):
+        self.dialog.file_table.add_path(self.make_input("a.inp"))
+        self.dialog.txt_command.setText("prog {1} {2}")
+        with patch("job_manager.submit_dialog.QMessageBox.warning") as warn:
+            self.dialog._submit()
+        warn.assert_called_once()
+        self.assertIn("{2}", warn.call_args.args[2])
+        self.assertEqual(self.store.jobs, {})
+
     def test_the_preview_shows_the_real_script(self):
         text = self.dialog.txt_preview.toPlainText()
         self.assertTrue(text.startswith("#!/bin/bash"))

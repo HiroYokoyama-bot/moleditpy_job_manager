@@ -100,3 +100,19 @@ def exec_once(key: str, build):
 
 
 __all__ = ["bring_to_front", "exec_once", "make_independent"]
+
+
+def shell_editor(editor, lines: int = 4) -> None:
+    """A box for a few lines of shell: fixed-width, tall enough to read them.
+
+    These were capped at 60-70 px, which showed one line with its bottom cut
+    off -- not enough to see that a second line was there.
+    """
+    from PySide6.QtGui import QFontDatabase
+
+    editor.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
+    margins = editor.contentsMargins()
+    frame = 2 * editor.frameWidth() + margins.top() + margins.bottom()
+    height = editor.fontMetrics().lineSpacing() * lines + frame + 8
+    editor.setMinimumHeight(height)
+    editor.setMaximumHeight(height)
