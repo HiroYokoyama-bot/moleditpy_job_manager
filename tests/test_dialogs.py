@@ -766,6 +766,33 @@ class TestSubmitDialog(DialogTestCase):
         self.assertEqual(len(presets), 1)
         self.assertEqual(presets[0].queue, "short")
 
+    def test_deleting_a_preset_asks_then_removes_it(self):
+        preset = self.store.add_preset(make_preset(queue="gpu"))
+        self.dialog._reload_hosts()
+        self.assertTrue(self.dialog.btn_delete_preset.isEnabled())
+        with patch(
+            "job_manager.submit_dialog.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.No,
+        ):
+            self.dialog._delete_preset()
+        self.assertIn(preset.id, self.store.presets)
+        self.dialog.txt_queue.setText("edited")
+        with patch(
+            "job_manager.submit_dialog.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.Yes,
+        ):
+            self.dialog.btn_delete_preset.click()
+        self.assertNotIn(preset.id, JobStore(self.tmp).presets)
+        self.assertEqual(self.dialog.cmb_preset.count(), 1)
+        self.assertEqual(self.dialog.cmb_preset.currentData(), "")
+        self.assertFalse(self.dialog.btn_delete_preset.isEnabled())
+        # The form is left as it was, not replaced by another preset.
+        self.assertEqual(self.dialog.txt_queue.text(), "edited")
+
+    def test_new_preset_cannot_be_deleted(self):
+        self.dialog.cmb_preset.setCurrentIndex(0)
+        self.assertFalse(self.dialog.btn_delete_preset.isEnabled())
+
     def test_reloading_a_preset_repopulates_the_form(self):
         self.store.add_preset(make_preset(queue="gpu", memory="64G"))
         self.dialog._reload_hosts()
@@ -1440,6 +1467,11 @@ class TestChainingAndScheduledStartInTheWizard(DialogTestCase):
 
     def test_the_hint_names_the_mechanism(self):
         self.assertIn("depend", self.dialog.lbl_chain.text().lower())
+
+    def test_the_dependency_is_not_ticked_by_default(self):
+        self.assertTrue(self.dialog.chk_chain.isEnabled())
+        self.assertFalse(self.dialog.chk_chain.isChecked())
+        self.assertNotIn("dependency", self.preview())
 
     def test_the_dependency_reaches_the_preview(self):
         self.dialog.chk_chain.setChecked(True)

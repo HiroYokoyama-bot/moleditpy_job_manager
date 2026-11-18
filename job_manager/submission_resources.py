@@ -154,7 +154,9 @@ class SubmissionResources(QWidget):
         self.chk_chain.setToolTip(
             "Hold this job until the one already queued on this host has finished."
         )
-        self.chk_chain.setChecked(True)
+        # Off: a dependency is something to ask for. On by default, it held
+        # jobs on SLURM/PBS/SGE hosts behind unrelated ones nobody chose.
+        self.chk_chain.setChecked(False)
         self.chk_chain_any = QCheckBox(CHAIN_ANY_TEXT)
         self.chk_chain_any.setToolTip(
             "Release it when that job ends, however it ended, rather than only on success."

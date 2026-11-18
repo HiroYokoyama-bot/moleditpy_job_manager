@@ -314,6 +314,11 @@ class SubmitDialog(QDialog):
         self.btn_save_preset = QPushButton("Save as preset")
         self.btn_save_preset.clicked.connect(self._save_preset)
         preset_row.addWidget(self.btn_save_preset)
+        self.btn_delete_preset = QPushButton("Delete preset")
+        self.btn_delete_preset.setToolTip("Delete the preset selected above.")
+        self.btn_delete_preset.clicked.connect(self._delete_preset)
+        self.btn_delete_preset.setEnabled(False)
+        preset_row.addWidget(self.btn_delete_preset)
         preset_row.addStretch(1)
         outer.addLayout(preset_row)
 
@@ -909,6 +914,8 @@ class SubmitDialog(QDialog):
 
     def _on_preset_changed(self) -> None:
         preset = self.store.presets.get(self.cmb_preset.currentData())
+        if hasattr(self, "btn_delete_preset"):
+            self.btn_delete_preset.setEnabled(preset is not None)
         if preset is not None:
             self._apply_preset(preset)
         self._refresh_preview()
@@ -1359,6 +1366,23 @@ class SubmitDialog(QDialog):
         index = self.cmb_preset.findData(preset.id)
         if index >= 0:
             self.cmb_preset.setCurrentIndex(index)
+
+    def _delete_preset(self) -> None:
+        preset = self.store.presets.get(self.cmb_preset.currentData())
+        if preset is None:
+            return
+        confirm = QMessageBox.question(self, "Delete preset", f"Delete preset '{preset.name}'?")
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+        self.store.remove_preset(preset.id)
+        # Drop just that entry and land on "(new preset)": rebuilding through
+        # _on_host_changed would select and apply the next preset, replacing
+        # the form the user was looking at.
+        self.cmb_preset.blockSignals(True)
+        self.cmb_preset.removeItem(self.cmb_preset.currentIndex())
+        self.cmb_preset.setCurrentIndex(0)
+        self.cmb_preset.blockSignals(False)
+        self.btn_delete_preset.setEnabled(False)
 
     @staticmethod
     def _server_resource_overrun(resources: dict, preset: SubmitPreset) -> str:
