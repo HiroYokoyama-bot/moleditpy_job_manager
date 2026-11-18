@@ -159,14 +159,17 @@ WAIT_POLL_SECONDS = 5
 _JOB_ID_RE = re.compile(r"^[A-Za-z0-9_.\[\]:-]+$")
 
 
-#: Both spellings are accepted: ``{input}`` and ``[input]``. Square brackets
-#: need no shell escaping and do not collide with brace expansion.
+#: Tags are spelled with braces only. ``[input]`` was once accepted too, and
+#: collided with the shell's own ``[...]`` patterns and array indices.
 _BRACE_RE = re.compile(r"\{(\w+)\}")
-_SQUARE_RE = re.compile(r"\[(\w+)\]")
 
 
 def placeholder_values(
-    input_name: str, preset: SubmitPreset, job_name: str = "", remote_dir: str = ""
+    input_name: str,
+    preset: SubmitPreset,
+    job_name: str = "",
+    remote_dir: str = "",
+    input_files: Sequence[str] = (),
 ) -> Dict[str, str]:
     """Every tag a command template may use, resolved for this job.
 
@@ -175,9 +178,16 @@ def placeholder_values(
     host names it, rather than a file this plugin uploaded.
     """
     stem = posixpath.splitext(input_name)[0] if input_name else ""
+    # {1}, {2}, ... are the uploaded files in list order. With nothing
+    # uploaded, {1} is the input named on the host.
+    numbered = {
+        str(index): posixpath.basename(name.replace("\\", "/"))
+        for index, name in enumerate(input_files or ([input_name] if input_name else []), 1)
+    }
     return {
+        **numbered,
+        "all": " ".join(numbered.values()),
         "input": input_name,
-        "basename": input_name,
         "stem": stem,
         "output": f"{stem}.out" if stem else "",
         "name": job_name,
@@ -193,7 +203,49 @@ def placeholder_values(
 
 
 #: Tags that stand for the input file, and so mean nothing without one.
-_INPUT_TAGS = frozenset({"input", "basename", "stem", "output"})
+_INPUT_TAGS = frozenset({"input", "stem", "output", "all"})
+
+#: Spellings that no longer substitute, mapped to what replaced them, so a
+#: saved command using one is stopped at submit instead of reaching the host
+#: with the tag still in it.
+RETIRED_TAGS = {
+    "{basename}": "{input}",
+    "[input]": "{input}",
+    "[basename]": "{input}",
+    "[stem]": "{stem}",
+    "[output]": "{output}",
+    "[name]": "{name}",
+    "[jobdir]": "{jobdir}",
+}
+
+
+def retired_tags(template: str) -> List[str]:
+    """The retired spellings ``template`` still uses, in a stable order."""
+    return [tag for tag in RETIRED_TAGS if tag in (template or "")]
+
+
+def retired_tags_message(template: str) -> str:
+    """Why ``template`` is refused, or empty when it uses no retired spelling."""
+    found = retired_tags(template)
+    if not found:
+        return ""
+    swaps = ", ".join(f"{tag} -> {RETIRED_TAGS[tag]}" for tag in found)
+    return f"The command uses a placeholder spelling that is no longer supported: {swaps}."
+
+
+def numbered_file_tags(template: str) -> List[int]:
+    """The ``{N}`` file numbers a command uses, ``${N}`` shell parameters aside."""
+    return sorted(
+        {
+            int(match.group(1))
+            for match in _BRACE_RE.finditer(template or "")
+            if match.group(1).isdigit() and not _after_dollar(match)
+        }
+    )
+
+
+def _after_dollar(match: "re.Match[str]") -> bool:
+    return match.start() > 0 and match.string[match.start() - 1] == "$"
 
 
 def references_input(template: str) -> bool:
@@ -204,8 +256,8 @@ def references_input(template: str) -> bool:
     find out why. Asked before submitting instead.
     """
     text = template or ""
-    tags = set(_BRACE_RE.findall(text)) | set(_SQUARE_RE.findall(text))
-    return bool(tags & _INPUT_TAGS)
+    tags = set(_BRACE_RE.findall(text))
+    return bool(tags & _INPUT_TAGS) or bool(numbered_file_tags(text))
 
 
 def format_command(
@@ -214,6 +266,7 @@ def format_command(
     preset: SubmitPreset,
     job_name: str = "",
     remote_dir: str = "",
+    input_files: Sequence[str] = (),
 ) -> str:
     """Substitute the placeholders a command template may use.
 
@@ -222,14 +275,16 @@ def format_command(
     ``awk '{print $1}'``, ``if [ -f x ]`` -- made format() raise, and the old
     fallback then ran the template with nothing substituted at all.
     """
-    values = placeholder_values(input_name, preset, job_name, remote_dir)
+    values = placeholder_values(input_name, preset, job_name, remote_dir, input_files)
 
     def replace(match: "re.Match[str]") -> str:
         key = match.group(1)
+        if key.isdigit() and _after_dollar(match):
+            # ${1} is the shell's own positional parameter, not a file.
+            return match.group(0)
         return str(values[key]) if key in values else match.group(0)
 
-    text = _BRACE_RE.sub(replace, template or "")
-    return _SQUARE_RE.sub(replace, text)
+    return _BRACE_RE.sub(replace, template or "")
 
 
 class Scheduler(ABC):
@@ -286,6 +341,7 @@ class Scheduler(ABC):
         preamble: Sequence[str] = (),
         relay_lines: Sequence[str] = (),
         start_time_text: str = "",
+        input_files: Sequence[str] = (),
     ) -> str:
         """Assemble the complete run script, sentinel included.
 
@@ -388,7 +444,9 @@ class Scheduler(ABC):
                 lines.append(command.strip())
         lines += [
             "",
-            format_command(preset.command_template, input_name, preset, job_name, remote_dir),
+            format_command(
+                preset.command_template, input_name, preset, job_name, remote_dir, input_files
+            ),
             "",
         ]
         return "\n".join(lines)

@@ -76,7 +76,7 @@ def create_job_actions(parent, callbacks):
         ),
         (
             "tail_file",
-            "Tail File…",
+            "Tail File...",
             callbacks["_tail_specific_file"],
             "Read the tail of a chosen remote output/log file in the job's directory.",
         ),

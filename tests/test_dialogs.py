@@ -688,6 +688,92 @@ class TestSubmitDialog(DialogTestCase):
         self.assertEqual(self.dialog.cmb_host.count(), 1)
         self.assertIs(self.dialog.current_host(), self.host)
 
+    def _pick(self, host):
+        self.store.add_host(host)
+        self.dialog._reload_hosts()
+        self.dialog.cmb_host.setCurrentIndex(self.dialog.cmb_host.findData(host.id))
+
+    def test_queue_tooltips_come_back_after_a_queueless_host(self):
+        own = self.dialog.txt_submit_options.toolTip()
+        self._pick(make_host(id="h-local", name="aaa", scheduler="shell"))
+        self.assertIn("no queue", self.dialog.txt_queue.toolTip())
+        self.assertIn("no queue", self.dialog.txt_submit_options.toolTip())
+        self.dialog.cmb_host.setCurrentIndex(self.dialog.cmb_host.findData(self.host.id))
+        self.assertNotIn("no queue", self.dialog.txt_queue.toolTip())
+        self.assertEqual(self.dialog.txt_submit_options.toolTip(), own)
+
+    def test_placeholders_follow_the_scheduler(self):
+        self.assertIn("#SBATCH", self.dialog.txt_extra.placeholderText())
+        self._pick(make_host(id="h-pbs", name="aaa", scheduler="pbs"))
+        self.assertIn("#PBS", self.dialog.txt_extra.placeholderText())
+        self.assertNotIn("SLURM", self.dialog.txt_pre.placeholderText())
+
+    def test_windows_hosts_grey_modules_and_speak_powershell(self):
+        self._pick(make_host(id="h-win", name="aaa", scheduler="windows"))
+        self.assertFalse(self.dialog.txt_modules.isEnabled())
+        self.assertIn("module", self.dialog.txt_modules.toolTip())
+        self.assertIn("$env:", self.dialog.txt_pre.placeholderText())
+        self.dialog.cmb_host.setCurrentIndex(self.dialog.cmb_host.findData(self.host.id))
+        self.assertTrue(self.dialog.txt_modules.isEnabled())
+        self.assertEqual(self.dialog.txt_modules.toolTip(), "")
+
+    @staticmethod
+    def _fixed_family():
+        # The family, not fontInfo().fixedPitch(): offscreen Qt has no
+        # fixed-pitch font to resolve to.
+        from PySide6.QtGui import QFontDatabase
+
+        return QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont).family()
+
+    def test_shell_boxes_show_several_lines_in_a_fixed_font(self):
+        for editor in (self.dialog.txt_modules, self.dialog.txt_pre, self.dialog.txt_extra):
+            self.assertEqual(editor.font().family(), self._fixed_family())
+            self.assertGreaterEqual(editor.height(), 3 * editor.fontMetrics().lineSpacing())
+
+    def test_the_preview_is_fixed_width_and_unwrapped(self):
+        from PySide6.QtWidgets import QPlainTextEdit
+
+        self.assertEqual(self.dialog.txt_preview.font().family(), self._fixed_family())
+        self.assertEqual(self.dialog.txt_preview.lineWrapMode(), QPlainTextEdit.LineWrapMode.NoWrap)
+        self.assertNotIn("trailing", self.dialog.lbl_preview_hint.text())
+
+    def test_file_rows_are_numbered_for_the_command(self):
+        self.assertFalse(self.dialog.file_table.verticalHeader().isHidden())
+
+    def test_numbered_files_reach_the_preview(self):
+        self.dialog.file_table.add_path(self.make_input("a.inp"))
+        self.dialog.file_table.add_path(self.make_input("b.gbw"))
+        self.dialog.txt_command.setText("prog {2} {1}")
+        self.dialog._refresh_preview()
+        self.assertIn("prog b.gbw a.inp", self.dialog.txt_preview.toPlainText())
+
+    def test_a_retired_spelling_is_refused_with_its_replacement(self):
+        self.dialog.file_table.add_path(self.make_input("a.inp"))
+        self.dialog.txt_command.setText("prog [input]")
+        with patch("job_manager.submit_dialog.QMessageBox.warning") as warn:
+            self.dialog._submit()
+        warn.assert_called_once()
+        self.assertIn("[input] -> {input}", warn.call_args.args[2])
+        self.assertEqual(self.store.jobs, {})
+
+    def test_placeholder_help_is_offered_in_the_template_list(self):
+        combo = self.dialog.cmb_template
+        index = combo.findText("Placeholder help...")
+        self.assertGreaterEqual(index, 0)
+        with patch("job_manager.template_editor_dialog.show_placeholder_help") as show:
+            self.dialog._on_template_chosen(index)
+        show.assert_called_once()
+        self.assertEqual(combo.currentIndex(), 0)
+
+    def test_a_number_past_the_list_is_refused(self):
+        self.dialog.file_table.add_path(self.make_input("a.inp"))
+        self.dialog.txt_command.setText("prog {1} {2}")
+        with patch("job_manager.submit_dialog.QMessageBox.warning") as warn:
+            self.dialog._submit()
+        warn.assert_called_once()
+        self.assertIn("{2}", warn.call_args.args[2])
+        self.assertEqual(self.store.jobs, {})
+
     def test_the_preview_shows_the_real_script(self):
         text = self.dialog.txt_preview.toPlainText()
         self.assertTrue(text.startswith("#!/bin/bash"))
@@ -744,14 +830,14 @@ class TestSubmitDialog(DialogTestCase):
         body = self.dialog.findChild(QScrollArea).widget()
         self.assertLessEqual(body.minimumSizeHint().width(), self.dialog.width())
 
-    def test_save_as_preset_has_a_line_of_its_own(self):
-        from PySide6.QtWidgets import QDialogButtonBox, QPushButton, QScrollArea
+    def test_preset_buttons_sit_beside_the_preset_list(self):
+        from PySide6.QtWidgets import QDialogButtonBox
 
-        scroll = self.dialog.findChild(QScrollArea)
+        row = self.dialog.cmb_preset.parentWidget()
+        self.assertIs(self.dialog.btn_save_preset.parentWidget(), row)
+        self.assertIs(self.dialog.btn_delete_preset.parentWidget(), row)
+        # Saving a preset is not submitting.
         box = self.dialog.findChild(QDialogButtonBox)
-        # Pinned like Submit rather than scrolling with the body, and not on the
-        # same row as it: saving a preset is not submitting.
-        self.assertNotIn(self.dialog.btn_save_preset, scroll.widget().findChildren(QPushButton))
         self.assertNotIn(self.dialog.btn_save_preset, box.buttons())
 
     def test_it_fits_on_a_short_screen(self):
@@ -765,6 +851,33 @@ class TestSubmitDialog(DialogTestCase):
         presets = self.store.presets_for_host(self.host.id)
         self.assertEqual(len(presets), 1)
         self.assertEqual(presets[0].queue, "short")
+
+    def test_deleting_a_preset_asks_then_removes_it(self):
+        preset = self.store.add_preset(make_preset(queue="gpu"))
+        self.dialog._reload_hosts()
+        self.assertTrue(self.dialog.btn_delete_preset.isEnabled())
+        with patch(
+            "job_manager.submit_dialog.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.No,
+        ):
+            self.dialog._delete_preset()
+        self.assertIn(preset.id, self.store.presets)
+        self.dialog.txt_queue.setText("edited")
+        with patch(
+            "job_manager.submit_dialog.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.Yes,
+        ):
+            self.dialog.btn_delete_preset.click()
+        self.assertNotIn(preset.id, JobStore(self.tmp).presets)
+        self.assertEqual(self.dialog.cmb_preset.count(), 1)
+        self.assertEqual(self.dialog.cmb_preset.currentData(), "")
+        self.assertFalse(self.dialog.btn_delete_preset.isEnabled())
+        # The form is left as it was, not replaced by another preset.
+        self.assertEqual(self.dialog.txt_queue.text(), "edited")
+
+    def test_new_preset_cannot_be_deleted(self):
+        self.dialog.cmb_preset.setCurrentIndex(0)
+        self.assertFalse(self.dialog.btn_delete_preset.isEnabled())
 
     def test_reloading_a_preset_repopulates_the_form(self):
         self.store.add_preset(make_preset(queue="gpu", memory="64G"))
@@ -1441,6 +1554,11 @@ class TestChainingAndScheduledStartInTheWizard(DialogTestCase):
     def test_the_hint_names_the_mechanism(self):
         self.assertIn("depend", self.dialog.lbl_chain.text().lower())
 
+    def test_the_dependency_is_not_ticked_by_default(self):
+        self.assertTrue(self.dialog.chk_chain.isEnabled())
+        self.assertFalse(self.dialog.chk_chain.isChecked())
+        self.assertNotIn("dependency", self.preview())
+
     def test_the_dependency_reaches_the_preview(self):
         self.dialog.chk_chain.setChecked(True)
         self.assertIn("--dependency=afterok:98765", self.preview())
@@ -1559,18 +1677,18 @@ class TestCommandTemplateDropdown(DialogTestCase):
 
     def test_the_command_stays_editable(self):
         self.choose("ORCA")
-        self.dialog.txt_command.setText("my own command [input]")
-        self.assertEqual(self.dialog.collect_preset().command_template, "my own command [input]")
+        self.dialog.txt_command.setText("my own command {input}")
+        self.assertEqual(self.dialog.collect_preset().command_template, "my own command {input}")
 
     def test_saved_templates_appear_and_can_be_chosen(self):
-        self.store.add_user_template("My VASP", "srun vasp_std > [output]")
+        self.store.add_user_template("My VASP", "srun vasp_std > {output}")
         self.dialog._reload_templates()
         self.assertIn("My VASP", self.labels())
         self.choose("My VASP")
-        self.assertEqual(self.dialog.txt_command.text(), "srun vasp_std > [output]")
+        self.assertEqual(self.dialog.txt_command.text(), "srun vasp_std > {output}")
 
     def test_saving_the_current_command(self):
-        self.dialog.txt_command.setText("orca [input] > [output]")
+        self.dialog.txt_command.setText("orca {input} > {output}")
         with patch(
             "job_manager.submission_templates.QInputDialog.getText", return_value=("Mine", True)
         ):
@@ -1578,7 +1696,7 @@ class TestCommandTemplateDropdown(DialogTestCase):
         templates = JobStore(self.tmp).user_templates()
         self.assertEqual(len(templates), 1)
         self.assertEqual(templates[0]["label"], "Mine")
-        self.assertEqual(templates[0]["command"], "orca [input] > [output]")
+        self.assertEqual(templates[0]["command"], "orca {input} > {output}")
 
     def test_saving_an_empty_command_is_refused(self):
         self.dialog.txt_command.setText("   ")
@@ -1607,9 +1725,9 @@ class TestCommandTemplateDropdown(DialogTestCase):
         self.assertIn("nwchem", self.dialog.txt_command.text())
 
     def test_prefill_never_overwrites_a_command_the_user_already_has(self):
-        self.dialog.txt_command.setText("keep me [input]")
+        self.dialog.txt_command.setText("keep me {input}")
         self.dialog.prefill(files=[self.make_input("mol.nw")], name="p")
-        self.assertEqual(self.dialog.txt_command.text(), "keep me [input]")
+        self.assertEqual(self.dialog.txt_command.text(), "keep me {input}")
 
     def test_an_ambiguous_extension_leaves_the_command_empty(self):
         # .inp belongs to ORCA, CP2K and GAMESS alike.

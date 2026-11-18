@@ -102,6 +102,7 @@ class WindowsScheduler(Scheduler):
         sentinel: str = "",
         preamble: Sequence[str] = (),
         relay_lines: Sequence[str] = (),
+        input_files: Sequence[str] = (),
     ) -> str:
         """The whole wrapper, in PowerShell rather than bash."""
         from ..models import SENTINEL_NAME
@@ -168,7 +169,10 @@ class WindowsScheduler(Scheduler):
             if command.strip():
                 lines.append(f"    {command.strip()}")
         lines += [
-            f"    {format_command(preset.command_template, input_name, preset, job_name, remote_dir)}",
+            "    "
+            + format_command(
+                preset.command_template, input_name, preset, job_name, remote_dir, input_files
+            ),
             # Read at once and defaulted: $LASTEXITCODE is set by native
             # executables only, and holds the *previous* program's status when
             # the command was a cmdlet.

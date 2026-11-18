@@ -103,38 +103,37 @@ class TestPlaceholderSpellings(unittest.TestCase):
     def render(self, template):
         return format_command(template, "mol.inp", self.preset)
 
-    def test_square_brackets_work_like_braces(self):
-        self.assertEqual(self.render("orca [input]"), "orca mol.inp")
+    def test_braces_substitute(self):
         self.assertEqual(self.render("orca {input}"), "orca mol.inp")
 
     def test_the_output_tag(self):
-        self.assertEqual(self.render("run [input] > [output]"), "run mol.inp > mol.out")
+        self.assertEqual(self.render("run {input} > {output}"), "run mol.inp > mol.out")
 
-    def test_the_two_spellings_can_be_mixed(self):
-        self.assertEqual(self.render("x {input} [output]"), "x mol.inp mol.out")
+    def test_square_brackets_are_no_longer_tags(self):
+        self.assertEqual(self.render("orca [input] {basename}"), "orca [input] {basename}")
 
     def test_resource_tags(self):
-        self.assertEqual(self.render("mpirun -np [ntasks]"), "mpirun -np 8")
-        self.assertEqual(self.render("-c [cpus] --mem [memory]"), "-c 4 --mem 16G")
+        self.assertEqual(self.render("mpirun -np {ntasks}"), "mpirun -np 8")
+        self.assertEqual(self.render("-c {cpus} --mem {memory}"), "-c 4 --mem 16G")
 
     def test_shell_braces_are_left_alone(self):
         # This used to make str.format raise, and the fallback then ran the
         # command with nothing substituted at all.
-        rendered = self.render("awk '{print $1}' [input] > [output]")
+        rendered = self.render("awk '{print $1}' {input} > {output}")
         self.assertEqual(rendered, "awk '{print $1}' mol.inp > mol.out")
 
     def test_a_shell_test_expression_is_left_alone(self):
-        rendered = self.render("if [ -f [input] ]; then orca [input]; fi")
+        rendered = self.render("if [ -f {input} ]; then orca {input}; fi")
         self.assertIn("[ -f mol.inp ]", rendered)
 
     def test_an_unknown_tag_is_left_verbatim(self):
-        self.assertEqual(self.render("run [nonsense] {alsonot}"), "run [nonsense] {alsonot}")
+        self.assertEqual(self.render("run {alsonot}"), "run {alsonot}")
 
     def test_an_empty_template_is_empty(self):
         self.assertEqual(self.render(""), "")
 
     def test_the_tags_reach_the_generated_script(self):
-        preset = SubmitPreset(command_template="pw.x -in [input] > [output]")
+        preset = SubmitPreset(command_template="pw.x -in {input} > {output}")
         script = get_scheduler("slurm").build_script("j", preset, "si.in", "job.log")
         self.assertIn("pw.x -in si.in > si.out", script)
 
@@ -148,15 +147,15 @@ class TestUserTemplatesPersist(unittest.TestCase):
         return JobStore(self.tmp)
 
     def test_a_saved_template_is_written_to_settings_json(self):
-        self.store.add_user_template("My ORCA", "orca [input] > [output]")
+        self.store.add_user_template("My ORCA", "orca {input} > {output}")
         with open(os.path.join(self.tmp, "settings.json"), encoding="utf-8") as handle:
             self.assertIn("My ORCA", handle.read())
 
     def test_it_survives_a_restart(self):
-        self.store.add_user_template("My ORCA", "orca [input] > [output]")
+        self.store.add_user_template("My ORCA", "orca {input} > {output}")
         self.assertEqual(
             self.reloaded().user_templates(),
-            [{"label": "My ORCA", "command": "orca [input] > [output]"}],
+            [{"label": "My ORCA", "command": "orca {input} > {output}"}],
         )
 
     def test_saving_the_same_label_replaces_it(self):
@@ -188,13 +187,13 @@ class TestUserTemplatesPersist(unittest.TestCase):
         self.assertEqual(self.store.user_templates(), [{"label": "ok", "command": ""}])
 
     def test_a_user_template_renders_like_a_built_in(self):
-        self.store.add_user_template("mine", "vasp_gam > [output]")
+        self.store.add_user_template("mine", "vasp_gam > {output}")
         saved = self.store.user_templates()[0]
         rendered = format_command(saved["command"], "POSCAR", SubmitPreset())
         self.assertEqual(rendered, "vasp_gam > POSCAR.out")
 
     def test_the_dataclass_accepts_a_saved_entry(self):
-        self.store.add_user_template("mine", "run [input]")
+        self.store.add_user_template("mine", "run {input}")
         saved = self.store.user_templates()[0]
         template = CommandTemplate(saved["label"], saved["command"])
         self.assertEqual(template.extensions, ())

@@ -26,6 +26,7 @@ from .submission_config import (
     FORCE_TEXT,
     with_reason,
 )
+from .window_utils import shell_editor
 
 
 class SubmissionResources(QWidget):
@@ -77,13 +78,12 @@ class SubmissionResources(QWidget):
         self.lbl_scanned.setVisible(False)
         self.txt_modules = QPlainTextEdit()
         self.txt_modules.setPlaceholderText("orca/5.0.4\nopenmpi/4.1.1")
-        self.txt_modules.setMaximumHeight(60)
         self.txt_pre = QPlainTextEdit()
         self.txt_pre.setPlaceholderText("export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK")
-        self.txt_pre.setMaximumHeight(60)
         self.txt_extra = QPlainTextEdit()
         self.txt_extra.setPlaceholderText("#SBATCH --exclusive")
-        self.txt_extra.setMaximumHeight(60)
+        for editor in (self.txt_modules, self.txt_pre, self.txt_extra):
+            shell_editor(editor)
         self.txt_submit_options = QLineEdit()
         self.txt_submit_options.setPlaceholderText("e.g. -l select=1:ncpus=8 -W group_list=mygroup")
         self.txt_submit_options.setToolTip(
@@ -154,7 +154,9 @@ class SubmissionResources(QWidget):
         self.chk_chain.setToolTip(
             "Hold this job until the one already queued on this host has finished."
         )
-        self.chk_chain.setChecked(True)
+        # Off: a dependency is something to ask for. On by default, it held
+        # jobs on SLURM/PBS/SGE hosts behind unrelated ones nobody chose.
+        self.chk_chain.setChecked(False)
         self.chk_chain_any = QCheckBox(CHAIN_ANY_TEXT)
         self.chk_chain_any.setToolTip(
             "Release it when that job ends, however it ended, rather than only on success."

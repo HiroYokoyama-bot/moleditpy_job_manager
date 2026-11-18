@@ -18,7 +18,9 @@ class FilePathTable(QTableWidget):
         self.setAlternatingRowColors(True)
         self.setWordWrap(False)
         self.setShowGrid(False)
-        self.verticalHeader().hide()
+        # Row numbers on the left: they are what {1}, {2}, ... in the command
+        # refer to, and they follow the rows as files are moved or removed.
+        self.verticalHeader().setToolTip("Use {1}, {2}, ... in the command for these files.")
         self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.setColumnWidth(0, 190)

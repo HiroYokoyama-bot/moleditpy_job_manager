@@ -43,6 +43,8 @@ _SET_DEFAULT = object()
 
 _MANAGE_TEMPLATES = object()
 
+_PLACEHOLDER_HELP = object()
+
 
 def with_reason(text: str, reason: str) -> str:
     """A control's own label, carrying why it is greyed (Qt shows no tooltip
