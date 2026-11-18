@@ -744,14 +744,14 @@ class TestSubmitDialog(DialogTestCase):
         body = self.dialog.findChild(QScrollArea).widget()
         self.assertLessEqual(body.minimumSizeHint().width(), self.dialog.width())
 
-    def test_save_as_preset_has_a_line_of_its_own(self):
-        from PySide6.QtWidgets import QDialogButtonBox, QPushButton, QScrollArea
+    def test_preset_buttons_sit_beside_the_preset_list(self):
+        from PySide6.QtWidgets import QDialogButtonBox
 
-        scroll = self.dialog.findChild(QScrollArea)
+        row = self.dialog.cmb_preset.parentWidget()
+        self.assertIs(self.dialog.btn_save_preset.parentWidget(), row)
+        self.assertIs(self.dialog.btn_delete_preset.parentWidget(), row)
+        # Saving a preset is not submitting.
         box = self.dialog.findChild(QDialogButtonBox)
-        # Pinned like Submit rather than scrolling with the body, and not on the
-        # same row as it: saving a preset is not submitting.
-        self.assertNotIn(self.dialog.btn_save_preset, scroll.widget().findChildren(QPushButton))
         self.assertNotIn(self.dialog.btn_save_preset, box.buttons())
 
     def test_it_fits_on_a_short_screen(self):

@@ -262,9 +262,26 @@ class SubmitDialog(QDialog):
         self.cmb_host.activated.connect(self._on_host_picked_by_user)
         self.cmb_preset = QComboBox()
         self.cmb_preset.currentIndexChanged.connect(self._on_preset_changed)
+        # Beside the list they act on, and well away from Submit.
+        self.btn_save_preset = QPushButton("Save")
+        self.btn_save_preset.setToolTip(
+            "Save these settings: over the selected preset, or as a new one named "
+            "after the job when (new preset) is selected."
+        )
+        self.btn_save_preset.clicked.connect(self._save_preset)
+        self.btn_delete_preset = QPushButton("Delete")
+        self.btn_delete_preset.setToolTip("Delete the selected preset.")
+        self.btn_delete_preset.clicked.connect(self._delete_preset)
+        self.btn_delete_preset.setEnabled(False)
+        preset_row = QWidget()
+        preset_layout = QHBoxLayout(preset_row)
+        preset_layout.setContentsMargins(0, 0, 0, 0)
+        preset_layout.addWidget(self.cmb_preset, 1)
+        preset_layout.addWidget(self.btn_save_preset)
+        preset_layout.addWidget(self.btn_delete_preset)
         self.txt_job_name = QLineEdit()
         top.addRow("Host", self.cmb_host)
-        top.addRow("Preset", self.cmb_preset)
+        top.addRow("Preset", preset_row)
         top.addRow("Job name", self.txt_job_name)
         layout.addLayout(top)
 
@@ -307,20 +324,6 @@ class SubmitDialog(QDialog):
         # Built with the resources tab, but shown up here: the command is what
         # the job *is*, not just a detail behind a tab of queue settings.
         top.addRow("Command", self.command_row)
-
-        # Its own line, outside the scroll area and above Submit, so it is not
-        # a button you could hit while reaching for Submit.
-        preset_row = QHBoxLayout()
-        self.btn_save_preset = QPushButton("Save as preset")
-        self.btn_save_preset.clicked.connect(self._save_preset)
-        preset_row.addWidget(self.btn_save_preset)
-        self.btn_delete_preset = QPushButton("Delete preset")
-        self.btn_delete_preset.setToolTip("Delete the preset selected above.")
-        self.btn_delete_preset.clicked.connect(self._delete_preset)
-        self.btn_delete_preset.setEnabled(False)
-        preset_row.addWidget(self.btn_delete_preset)
-        preset_row.addStretch(1)
-        outer.addLayout(preset_row)
 
         box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -914,8 +917,7 @@ class SubmitDialog(QDialog):
 
     def _on_preset_changed(self) -> None:
         preset = self.store.presets.get(self.cmb_preset.currentData())
-        if hasattr(self, "btn_delete_preset"):
-            self.btn_delete_preset.setEnabled(preset is not None)
+        self.btn_delete_preset.setEnabled(preset is not None)
         if preset is not None:
             self._apply_preset(preset)
         self._refresh_preview()
