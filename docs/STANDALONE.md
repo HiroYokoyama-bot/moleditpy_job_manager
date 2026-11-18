@@ -50,7 +50,15 @@ moleditpy-job-manager                  # the Job Monitor
 moleditpy-job-manager --host-monitor   # the Host Monitor
 ```
 
-`python -m job_manager` does the same. A second launch brings the running Job
+`python -m job_manager` does the same, and so does the plugin installed in
+MoleditPy 5.3 or later, without opening the editor:
+
+```bash
+moleditpy -r job_manager               # the Job Monitor
+moleditpy -r job_manager -m            # the Host Monitor
+```
+
+`--help` lists these forms. A second launch brings the running Job
 Manager to the front instead of starting another tracker, including one
 started in the same moment, which waits for the first to finish starting.
 

@@ -19,6 +19,21 @@ from . import shutdown as release_service
 from .store import default_data_dir
 
 HOST_MONITOR_FLAGS = ("--host-monitor", "--hosts", "host-monitor", "-m")
+HELP_FLAGS = ("-h", "--help")
+
+USAGE = """usage: moleditpy-job-manager [--host-monitor]
+
+Job Manager without the molecular editor: the Job Monitor, or with
+--host-monitor (-m) the Host Monitor. A second launch brings the running
+Job Manager to the front instead of starting another.
+
+The same program runs as:
+  python -m job_manager             from the folder that contains job_manager/
+  moleditpy -r job_manager          the plugin installed in MoleditPy 5.3+
+
+Submitting, waiting and fetching from a script: moleditpy-job
+(python -m job_manager.api_client), with the Local API switched on.
+"""
 
 
 def _argument(args, name: str) -> str:
@@ -29,6 +44,11 @@ def _argument(args, name: str) -> str:
 
 def main() -> int:
     args = sys.argv[1:]
+    if any(arg in HELP_FLAGS for arg in args):
+        # Before the instance lock: asking for help must not bring a running
+        # Job Manager's window up, nor open one.
+        print(USAGE, end="")
+        return 0
     data_dir = default_data_dir()
     tray_mode = "--tray" in args
     host_view = any(arg in HOST_MONITOR_FLAGS for arg in args)
