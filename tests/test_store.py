@@ -104,6 +104,42 @@ class TestHostsAndPresets(StoreTestCase):
         self.store.add_host(HostProfile(id="b", name="Alpha"))
         self.assertEqual([h.name for h in self.store.host_list()], ["Alpha", "zeta"])
 
+    def test_moving_a_host_overrides_alphabetical_order(self):
+        for host_id, name in (("a", "alpha"), ("b", "beta"), ("c", "gamma")):
+            self.store.add_host(HostProfile(id=host_id, name=name))
+        self.assertTrue(self.store.move_host("c", -2))
+        self.assertEqual([h.id for h in self.store.host_list()], ["c", "a", "b"])
+        self.assertEqual([h.id for h in JobStore(self.tmp).host_list()], ["c", "a", "b"])
+
+    def test_moving_past_either_end_does_nothing(self):
+        self.store.add_host(HostProfile(id="a", name="alpha"))
+        self.store.add_host(HostProfile(id="b", name="beta"))
+        self.assertFalse(self.store.move_host("a", -1))
+        self.assertFalse(self.store.move_host("b", 1))
+        self.assertFalse(self.store.move_host("ghost", 1))
+        self.assertEqual(self.store.get_pref("host_order"), [])
+
+    def test_hosts_missing_from_the_order_follow_alphabetically(self):
+        self.store.add_host(HostProfile(id="a", name="alpha"))
+        self.store.add_host(HostProfile(id="b", name="beta"))
+        self.store.move_host("b", -1)
+        self.store.add_host(HostProfile(id="z", name="Zulu"))
+        self.store.add_host(HostProfile(id="c", name="charlie"))
+        self.assertEqual([h.id for h in self.store.host_list()], ["b", "a", "c", "z"])
+
+    def test_a_malformed_order_is_ignored(self):
+        self.store.add_host(HostProfile(id="a", name="alpha"))
+        self.store.add_host(HostProfile(id="b", name="beta"))
+        self.store.prefs["host_order"] = ["b", 3, None, "b", "ghost"]
+        self.assertEqual([h.id for h in self.store.host_list()], ["b", "a"])
+
+    def test_removing_a_host_drops_it_from_the_order(self):
+        self.store.add_host(HostProfile(id="a", name="alpha"))
+        self.store.add_host(HostProfile(id="b", name="beta"))
+        self.store.move_host("b", -1)
+        self.store.remove_host("b")
+        self.assertEqual(self.store.get_pref("host_order"), ["a"])
+
     def test_removing_a_host_removes_its_presets(self):
         self.store.add_host(HostProfile(id="h1"))
         self.store.add_preset(SubmitPreset(id="p1", host_id="h1"))

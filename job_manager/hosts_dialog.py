@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -117,6 +118,21 @@ class HostsDialog(QDialog):
         self.btn_remove.clicked.connect(self._remove_host)
         buttons.addWidget(add)
         buttons.addWidget(self.btn_remove)
+        # The order here is the order every host picker uses.
+        self.btn_up = QToolButton()
+        self.btn_up.setArrowType(Qt.ArrowType.UpArrow)
+        self.btn_up.setToolTip(
+            "Move the selected host up. Host lists everywhere follow this order."
+        )
+        self.btn_up.clicked.connect(lambda: self._move_host(-1))
+        self.btn_down = QToolButton()
+        self.btn_down.setArrowType(Qt.ArrowType.DownArrow)
+        self.btn_down.setToolTip(
+            "Move the selected host down. Host lists everywhere follow this order."
+        )
+        self.btn_down.clicked.connect(lambda: self._move_host(1))
+        for arrow in (self.btn_up, self.btn_down):
+            buttons.addWidget(arrow)
         left.addLayout(buttons)
         outer.addLayout(left, 1)
 
@@ -272,6 +288,12 @@ class HostsDialog(QDialog):
             self.btn_remove,
         ):
             widget.setEnabled(enabled)
+        self._update_move_buttons()
+
+    def _update_move_buttons(self) -> None:
+        row = self.list.currentRow() if self.list.currentItem() is not None else -1
+        self.btn_up.setEnabled(row > 0)
+        self.btn_down.setEnabled(0 <= row < self.list.count() - 1)
 
     def _clear_form(self) -> None:
         self.chk_enabled.setChecked(True)
@@ -448,6 +470,30 @@ class HostsDialog(QDialog):
         host = HostProfile(name="new host", remote_root="~/moleditpy_jobs")
         self.store.add_host(host)
         self._reload_list(select_id=host.id)
+
+    def _move_host(self, offset: int) -> None:
+        """Move the selected host within the list, keeping any unsaved edits.
+
+        The row is moved in place rather than the list rebuilt: a rebuild
+        re-selects, which reloads the form from the stored profile and would
+        silently throw away whatever was typed but not yet saved.
+        """
+        item = self.list.currentItem()
+        if item is None:
+            return
+        host_id = item.data(Qt.ItemDataRole.UserRole)
+        if not self.store.move_host(host_id, offset):
+            return
+        row = self.list.currentRow()
+        target = max(0, min(self.list.count() - 1, row + offset))
+        self.list.blockSignals(True)
+        try:
+            moved = self.list.takeItem(row)
+            self.list.insertItem(target, moved)
+            self.list.setCurrentRow(target)
+        finally:
+            self.list.blockSignals(False)
+        self._update_move_buttons()
 
     def _remove_host(self) -> None:
         host = self._selected_host()

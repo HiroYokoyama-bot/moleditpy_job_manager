@@ -50,7 +50,7 @@ _ROOT = ""
 
 def browsable_hosts(service) -> list:
     """Shell hosts and authenticated Job Server virtual job folders."""
-    return list(service.store.hosts.values())
+    return list(service.store.host_list())
 
 
 class HostFileBrowserDialog(OutputFileSelectorDialog):
