@@ -154,6 +154,9 @@ DEFAULT_PREFS: Dict[str, Any] = {
     #: Port for that API on 127.0.0.1. A port already in use falls back to one
     #: the OS picks, which the endpoint file names either way.
     "api_port": 8765,
+    #: Host ids in the order the user arranged them under Hosts. Empty, or a
+    #: host missing from it, falls back to alphabetical after the listed ones.
+    "host_order": [],
 }
 
 
@@ -587,6 +590,9 @@ class JobStore:
 
     def remove_host(self, host_id: str) -> None:
         self.hosts.pop(host_id, None)
+        order = self.prefs.get("host_order")
+        if isinstance(order, list) and host_id in order:
+            self.prefs["host_order"] = [i for i in order if i != host_id]
         for preset_id in [p.id for p in self.presets.values() if p.host_id == host_id]:
             self.presets.pop(preset_id, None)
         self.save_settings()
@@ -654,7 +660,37 @@ class JobStore:
         return candidates[0]
 
     def host_list(self) -> List[HostProfile]:
-        return sorted(self.hosts.values(), key=lambda h: h.name.lower())
+        """Hosts in the user's chosen order; unordered ones alphabetically after."""
+        order = self.prefs.get("host_order")
+        position = {}
+        if isinstance(order, list):
+            for index, host_id in enumerate(order):
+                if isinstance(host_id, str) and host_id not in position:
+                    position[host_id] = index
+        unplaced = len(position)
+        return sorted(
+            self.hosts.values(),
+            key=lambda h: (position.get(h.id, unplaced), h.name.lower()),
+        )
+
+    def move_host(self, host_id: str, offset: int) -> bool:
+        """Move a host ``offset`` places up (negative) or down the list.
+
+        The whole current order is written, so hosts that were only ever
+        placed alphabetically are pinned where they were seen. Returns False
+        when the host is unknown or already at that end.
+        """
+        ids = [host.id for host in self.host_list()]
+        if host_id not in ids:
+            return False
+        index = ids.index(host_id)
+        target = max(0, min(len(ids) - 1, index + offset))
+        if target == index:
+            return False
+        ids.insert(target, ids.pop(index))
+        self.prefs["host_order"] = ids
+        self.save_settings()
+        return True
 
     # --- presets ------------------------------------------------------------
 

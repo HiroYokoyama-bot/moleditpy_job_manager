@@ -574,7 +574,7 @@ class JobsDialog(QDialog):
     def _open_ssh_terminal(self) -> None:
         from .ssh_terminal import supports_ssh
 
-        hosts = [host for host in self.service.store.hosts.values() if supports_ssh(host)]
+        hosts = [host for host in self.service.store.host_list() if supports_ssh(host)]
         if not hosts:
             QMessageBox.information(self, "SSH Terminal", "Add an SSH host under Hosts first.")
             return

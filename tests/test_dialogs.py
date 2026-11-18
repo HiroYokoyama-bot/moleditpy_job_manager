@@ -425,6 +425,27 @@ class TestHostsDialog(DialogTestCase):
         self.dialog._add_host()
         self.assertEqual(len(self.store.hosts), 2)
 
+    def test_move_buttons_reorder_hosts(self):
+        other = make_host(id="h2", name="zzz", hostname="other.example.org")
+        self.store.add_host(other)
+        self.dialog._reload_list(select_id=other.id)
+        self.assertTrue(self.dialog.btn_up.isEnabled())
+        self.assertFalse(self.dialog.btn_down.isEnabled())
+        self.dialog.btn_up.click()
+        self.assertEqual([h.id for h in JobStore(self.tmp).host_list()], ["h2", self.host.id])
+        self.assertEqual(self.dialog.list.currentRow(), 0)
+        self.assertEqual(self.dialog.list.item(0).data(256), "h2")
+        self.assertFalse(self.dialog.btn_up.isEnabled())
+        self.assertTrue(self.dialog.btn_down.isEnabled())
+
+    def test_moving_keeps_unsaved_edits(self):
+        self.store.add_host(make_host(id="h2", name="zzz", hostname="other.example.org"))
+        self.dialog._reload_list(select_id=self.host.id)
+        self.dialog.txt_hostname.setText("typed.example.org")
+        self.dialog.btn_down.click()
+        self.assertEqual(self.dialog.txt_hostname.text(), "typed.example.org")
+        self.assertEqual(self.dialog.list.currentRow(), 1)
+
     def test_removing_a_host_asks_first(self):
         from PySide6.QtWidgets import QMessageBox
 
@@ -1825,7 +1846,8 @@ class TestSshTerminalActions(DialogTestCase):
         launch.assert_called_once_with(self.host)
 
     def test_host_selection_persists_and_is_preselected_after_reload(self):
-        second = make_host(id="h2", name="other-host")
+        # Sorts after "testcluster": the picker lists hosts in host_list() order.
+        second = make_host(id="h2", name="zz-other-host")
         self.store.add_host(second)
         with (
             patch(
