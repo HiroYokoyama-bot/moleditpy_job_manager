@@ -763,7 +763,9 @@ class JobsDialog(QDialog):
 
         Separate from Refresh Now, which asks the *hosts*: two windows share one
         job file and never see each other's writes until one of them re-reads
-        it. Not rate limited -- this is a file read, not a login node.
+        it. Not rate limited -- this is a file read, not a login node. Job
+        Server hosts are also asked for unfinished jobs submitted elsewhere
+        (the web page, another computer): one request per server.
         """
         selected = self.selected_job()
         selected_id = selected.id if selected is not None else ""
@@ -773,6 +775,19 @@ class JobsDialog(QDialog):
             # jobs_changed resets the model, which drops the selection; put it
             # back so a reload does not lose the row the user was working on.
             self._select_job(selected_id)
+
+        def imported(host_name: str, added: int) -> None:
+            if added:
+                self._append_message(
+                    f"{host_name}: took in {added} job(s) submitted from elsewhere."
+                )
+                if selected_id:
+                    self._select_job(selected_id)
+
+        def failed(host_name: str, message: str) -> None:
+            self._append_message(f"{host_name}: could not list its jobs: {message}")
+
+        self.service.import_server_jobs(imported, failed, owner=self)
 
     def _select_job(self, job_id: str) -> None:
         """Re-select ``job_id`` if it is still in the table."""

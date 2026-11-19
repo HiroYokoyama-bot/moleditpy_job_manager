@@ -716,6 +716,26 @@ class JobStore:
         self.save_jobs()
         return job
 
+    def adopt_jobs(self, jobs: List[Job]) -> int:
+        """Add jobs found on a host that this list does not track yet.
+
+        Checked again here, on the GUI thread: the list may have taken the
+        same job in -- from a reload, or another lookup -- while the host was
+        being asked.
+        """
+        tracked = {(j.host_id, j.remote_job_id) for j in self.jobs.values() if j.remote_job_id}
+        added = 0
+        for job in jobs:
+            if job.id in self.jobs or (job.host_id, job.remote_job_id) in tracked:
+                continue
+            self.jobs[job.id] = job
+            tracked.add((job.host_id, job.remote_job_id))
+            added += 1
+        if added:
+            self.invalidate_chains()
+            self.save_jobs()
+        return added
+
     def remove_job(self, job_id: str) -> None:
         self.jobs.pop(job_id, None)
         self.invalidate_chains()

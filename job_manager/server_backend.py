@@ -11,6 +11,10 @@ from urllib.parse import quote
 
 from .job_server_client.files import validate_path
 
+#: Server states a reload does not take in: finished, or still being uploaded
+#: by whoever is submitting it.
+IMPORT_SKIPPED_STATES = frozenset({"DONE", "FAILED", "CANCELLED", "LOST", "UPLOADING"})
+
 INSTALL_HINT = "Job Server support needs optional cryptography >=50.0.2. Install with: python -m pip install --upgrade 'cryptography>=50.0.2'"
 
 
@@ -525,6 +529,72 @@ class JobServerBackend:
         job.submitted_at = time.time()
         job.touch(result["state"])
         return job
+
+    def untracked(self, known):
+        """The server's unfinished jobs that are not in ``known`` (remote ids).
+
+        A job submitted from the web page, or from another computer under
+        the same account, is the server's alone: polling only asks about jobs
+        already in the list. Finished jobs are left out on purpose -- nothing
+        remembers that one was removed from the list, so taking in finished
+        ones would bring back every job the user had cleared away.
+        """
+        from .models import Job
+
+        records, offset = [], 0
+        while True:
+            page = self.client.request("GET", f"/jobs?limit=1000&offset={offset}")
+            records.extend(page)
+            if len(page) < 1000:
+                break
+            offset += len(page)
+        wanted = [
+            record
+            for record in records
+            if record["id"] not in known and record["state"] not in IMPORT_SKIPPED_STATES
+        ]
+        if not wanted:
+            return []
+        execution_os = self.client.request("GET", "/capabilities")["execution_os"]
+        server_id = self.client.server_id
+        result = []
+        for record in wanted:
+            spec = record.get("spec") or {}
+            state = (
+                "HELD"
+                if record["state"] == "PENDING" and record.get("held") is True
+                else record["state"]
+            )
+            ahead = record.get("queue_ahead")
+            job = Job(
+                # The same id in every Job Manager that takes it in, so two
+                # windows importing one job merge it instead of listing it twice.
+                id=uuid.uuid5(uuid.NAMESPACE_URL, f"{server_id}/{record['id']}").hex[:12],
+                name=str(spec.get("name") or record["id"]),
+                host_id=self.host.id,
+                host_name=self.host.name,
+                scheduler=self.host.scheduler,
+                remote_dir=record["id"],
+                remote_job_id=record["id"],
+                server_job_id=record["id"],
+                server_id=server_id,
+                owner_user_id=record.get("owner_id", ""),
+                execution_os=execution_os,
+                last_server_state=record["state"],
+                server_queue_ahead=(
+                    ahead if isinstance(ahead, int) and not isinstance(ahead, bool) else -1
+                ),
+                command=str(spec.get("command") or ""),
+                fetch_globs=list(spec.get("fetch_globs") or []),
+                auto_download=bool(spec.get("auto_download", True)),
+                chain_any=bool(spec.get("chain_any", False)),
+                log_file="job.log",
+                state=state,
+                submitted_at=float(record.get("created_at") or 0.0),
+                started_at=float(record.get("started_at") or 0.0),
+            )
+            result.append(job)
+        return result
 
     def poll(self, jobs):
         pending = {job.remote_job_id for job in jobs}

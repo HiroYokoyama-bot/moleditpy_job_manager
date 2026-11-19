@@ -976,6 +976,46 @@ class JobService(QObject):
             self.poller.start()
         return result
 
+    def import_server_jobs(
+        self,
+        on_done: Callable[[str, int], None],
+        on_error: Optional[Callable[[str, str], None]] = None,
+        owner=None,
+    ) -> int:
+        """Take in each Job Server's unfinished jobs that this list lacks.
+
+        Jobs submitted from the server's web page, or from another computer,
+        are otherwise invisible here. One request per server host, off the GUI
+        thread; ``on_done(host_name, added)`` per host. Returns how many
+        hosts were asked.
+        """
+        hosts = [host for host in self.store.hosts.values() if host.is_job_server]
+        for host in hosts:
+            known = {
+                job.remote_job_id
+                for job in self.store.jobs.values()
+                if job.host_id == host.id and job.remote_job_id
+            }
+
+            def work(host=host, known=known) -> List[Job]:
+                from .server_backend import backend_for
+
+                return backend_for(host).untracked(known)
+
+            def done(found: List[Job], host=host) -> None:
+                added = self.store.adopt_jobs(found)
+                if added:
+                    self.jobs_changed.emit()
+                    self.poller.start()
+                on_done(host.name, added)
+
+            def failed(message: str, host=host) -> None:
+                if on_error is not None:
+                    on_error(host.name, message)
+
+            run_async(self.pool, work, on_success=done, on_error=failed, quiet=True, owner=owner)
+        return len(hosts)
+
     def shutdown(self) -> None:
         from . import host_sampler
 

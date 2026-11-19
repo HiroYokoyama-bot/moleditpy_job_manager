@@ -662,7 +662,16 @@ submitted, finished or removed in the other window appears here. Refresh Now
 does not help, because a job this window has never heard of is not in the list
 it asks the hosts about.
 
-It costs no network at all, so it is not rate limited. A job either window is
+On a **Job Server** host, Reload List also asks the server for your jobs that
+this list does not have — one submitted from the server's web page, or from
+another computer signed in as the same user — and adds the ones still waiting
+or running. From then on they are polled, tailed, cancelled and downloaded like
+any other. Finished jobs are not brought in: nothing remembers that you removed
+one from the list, so they would all come back on every reload. Open a finished
+one through **Tools ▸ File Browser** instead.
+
+The file re-read costs no network at all, so it is not rate limited (the Job
+Server lookup is one request per server host). A job either window is
 still uploading or downloading is left exactly as it is — the window doing the
 transfer owns that record until it lands. The action is off while an archive or
 a rebuilt list is on screen, where a count of what changed in the live list
