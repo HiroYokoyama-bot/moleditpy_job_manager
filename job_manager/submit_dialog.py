@@ -1221,8 +1221,7 @@ class SubmitDialog(QDialog):
             self.lbl_scanned.setVisible(True)
 
     def _on_scan_resources_toggled(self, checked: bool) -> None:
-        """Remember the choice, disable/enable inputs, and act on it for the file already chosen."""
-        self.store.set_pref("scan_resources", bool(checked))
+        """Disable/enable the inputs, and act on it for the file already chosen."""
         self.spin_cpus.setEnabled(not checked)
         self.txt_memory.setEnabled(not checked)
         if not checked:
@@ -1733,6 +1732,7 @@ class SubmitDialog(QDialog):
             upload_files=upload_files,
             force_run=self.force_requested(),
             force_after_previous=self.force_wait_requested(),
+            **self._download_choices(),
         )
         self._remember(host, preset)
         self.accept()
@@ -1779,6 +1779,7 @@ class SubmitDialog(QDialog):
                 chain_any=self.chain_any_requested(),
                 force_run=self.force_requested(),
                 force_after_previous=self.force_wait_requested(),
+                **self._download_choices(),
             )
         self._remember(host, preset)
 
@@ -1791,12 +1792,23 @@ class SubmitDialog(QDialog):
         """
         self.store.set_pref("last_host_id", host.id)
 
+    def _download_choices(self) -> dict:
+        """Where and what this job downloads, as chosen in this window."""
+        downloads = self.chk_auto_download.isChecked()
+        return {
+            "download_all": downloads and self.chk_download_all.isChecked(),
+            "beside_input": self.chk_beside_input.isChecked(),
+            "download_root": self.txt_download_root.text().strip() or None,
+        }
+
     def _confirm_duplicate(self, files: List[str]) -> bool:
         """Warn when this input has been submitted before. False cancels.
 
         Not for Resubmit, which is somebody asking for exactly that -- this
         catches the accidental double submission.
         """
+        if not self.store.get_pref("warn_duplicate_submission", True):
+            return True
         wanted = {os.path.abspath(path) for path in files if path}
         if not wanted:
             return True

@@ -144,6 +144,18 @@ DEFAULT_PREFS: Dict[str, Any] = {
     #: "fetch_globs": [...]}}. Disambiguates e.g. .inp (ORCA/CP2K/GAMESS all
     #: use it) once the user has answered once.
     "default_commands": {},
+    #: The same, per host, used ahead of default_commands on that host:
+    #: {host_id: {".inp": {"command": ..., "fetch_globs": [...]}}}.
+    "host_default_commands": {},
+    #: What a new submission opens on: "empty", "last" (the preset last
+    #: submitted with on that host) or "default" (the host's starred preset).
+    "submit_start_from": "empty",
+    #: {host_id: preset_id}, for submit_start_from.
+    "last_presets": {},
+    "default_presets": {},
+    #: Defaults for a new job; the submit window changes them for one job.
+    "open_result_default": False,
+    "warn_duplicate_submission": True,
     #: Seconds between host-monitor samples. 0 means "not chosen"; the
     #: per-backend default applies.
     "host_monitor_interval": 0,
@@ -596,6 +608,17 @@ class JobStore:
             self.prefs["host_order"] = [i for i in order if i != host_id]
         for preset_id in [p.id for p in self.presets.values() if p.host_id == host_id]:
             self.presets.pop(preset_id, None)
+        # What belonged to the host goes with it: a template or default for a
+        # host that no longer exists could never be offered again.
+        templates = self.prefs.get("command_templates")
+        if isinstance(templates, list):
+            self.prefs["command_templates"] = [
+                t for t in templates if not (isinstance(t, dict) and t.get("host_id") == host_id)
+            ]
+        for key in ("host_default_commands", "last_presets", "default_presets"):
+            stored = self.prefs.get(key)
+            if isinstance(stored, dict) and host_id in stored:
+                self.prefs[key] = {k: v for k, v in stored.items() if k != host_id}
         self.save_settings()
 
     def host_for_local_path(self, path: str, prefer_id: str = "") -> Optional[HostProfile]:
@@ -1118,12 +1141,13 @@ class JobStore:
 
     # --- user command templates ---------------------------------------------
 
-    def user_templates(self) -> List[Dict[str, Any]]:
+    def user_templates(self, host_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """The user's own command templates, preserving all stored fields.
 
-        Returns dicts with at least ``"label"`` and ``"command"``; additional
-        fields such as ``"fetch_globs"`` are passed through unchanged so that
-        :meth:`add_user_template` can re-save them without losing data.
+        Returns dicts with at least ``"label"`` and ``"command"``, plus
+        ``"fetch_globs"`` and ``"host_id"`` where set. A template without a
+        ``host_id`` is for every host. With ``host_id`` given, only what that
+        host can use: its own templates first, then the ones for every host.
         """
         raw = self.get_pref("command_templates", []) or []
         result = []
@@ -1136,52 +1160,154 @@ class JobStore:
             }
             if item.get("fetch_globs"):
                 entry["fetch_globs"] = list(item["fetch_globs"])
+            if item.get("host_id"):
+                entry["host_id"] = str(item["host_id"])
             result.append(entry)
-        return result
+        if host_id is None:
+            return result
+        own = [t for t in result if host_id and t.get("host_id") == host_id]
+        shared = [t for t in result if not t.get("host_id")]
+        return own + shared
 
-    def default_command_for(self, extension: str) -> Dict[str, Any]:
-        """What this user runs for that input extension, or an empty dict."""
+    def default_command_for(self, extension: str, host_id: str = "") -> Dict[str, Any]:
+        """What this user runs for that input extension, or an empty dict.
+
+        The host's own default first, then the one for every host; a host's
+        entry carries ``"host_id"`` so the caller can say where it came from.
+        """
+        extension = (extension or "").lower()
+        if host_id:
+            per_host = self.get_pref("host_default_commands", {}) or {}
+            entry = (per_host.get(host_id) or {}).get(extension)
+            if isinstance(entry, dict) and entry.get("command"):
+                return {**entry, "host_id": host_id}
         stored = self.get_pref("default_commands", {}) or {}
-        return dict(stored.get((extension or "").lower(), {}))
+        return dict(stored.get(extension, {}))
+
+    def host_default_commands(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
+        """Per-host defaults: ``{host_id: {".inp": {"command": ...}}}``."""
+        stored = self.get_pref("host_default_commands", {}) or {}
+        return {
+            host_id: {ext: dict(entry) for ext, entry in entries.items() if isinstance(entry, dict)}
+            for host_id, entries in stored.items()
+            if isinstance(entries, dict)
+        }
 
     def set_default_command(
-        self, extension: str, command: str, fetch_globs: Optional[List[str]] = None
+        self,
+        extension: str,
+        command: str,
+        fetch_globs: Optional[List[str]] = None,
+        host_id: str = "",
     ) -> None:
-        """Remember a command for an extension; empty command forgets it."""
+        """Remember a command for an extension; empty command forgets it.
+
+        With ``host_id`` it is that host's default, used ahead of the one for
+        every host -- the same program lives at a different path on each.
+        """
         extension = (extension or "").lower()
         if not extension:
             return
+        entry: Dict[str, Any] = {"command": command}
+        if fetch_globs:
+            entry["fetch_globs"] = list(fetch_globs)
+        forget = not (command or "").strip()
+        if host_id:
+            stored = self.host_default_commands()
+            entries = stored.setdefault(host_id, {})
+            if forget:
+                entries.pop(extension, None)
+            else:
+                entries[extension] = entry
+            if not entries:
+                stored.pop(host_id, None)
+            self.set_pref("host_default_commands", stored)
+            return
         stored = dict(self.get_pref("default_commands", {}) or {})
-        if not (command or "").strip():
+        if forget:
             stored.pop(extension, None)
         else:
-            entry: Dict[str, Any] = {"command": command}
-            if fetch_globs:
-                entry["fetch_globs"] = list(fetch_globs)
             stored[extension] = entry
         self.set_pref("default_commands", stored)
 
     def add_user_template(
-        self, label: str, command: str, fetch_globs: Optional[List[str]] = None
+        self,
+        label: str,
+        command: str,
+        fetch_globs: Optional[List[str]] = None,
+        host_id: str = "",
     ) -> None:
         """Save (or replace) one template. Persisted in settings.json.
 
-        Fetch patterns travel with the command -- both describe the same program.
+        Fetch patterns travel with the command -- both describe the same
+        program. A label is unique per host, so "ORCA" can be saved once for
+        every host and again for the one where it lives somewhere else.
         """
         label = (label or "").strip()
         if not label:
             return
-        templates = [t for t in self.user_templates() if t["label"] != label]
-        entry = {"label": label, "command": command or ""}
+        templates = [
+            t
+            for t in self.user_templates()
+            if not (t["label"] == label and t.get("host_id", "") == (host_id or ""))
+        ]
+        entry: Dict[str, Any] = {"label": label, "command": command or ""}
         if fetch_globs:
             entry["fetch_globs"] = list(fetch_globs)
+        if host_id:
+            entry["host_id"] = host_id
         templates.append(entry)
-        self.set_pref("command_templates", sorted(templates, key=lambda t: t["label"].lower()))
-
-    def remove_user_template(self, label: str) -> None:
         self.set_pref(
-            "command_templates", [t for t in self.user_templates() if t["label"] != label]
+            "command_templates",
+            sorted(templates, key=lambda t: (t["label"].lower(), t.get("host_id", ""))),
         )
+
+    def remove_user_template(self, label: str, host_id: str = "") -> None:
+        self.set_pref(
+            "command_templates",
+            [
+                t
+                for t in self.user_templates()
+                if not (t["label"] == label and t.get("host_id", "") == (host_id or ""))
+            ],
+        )
+
+    # --- presets a new submission starts from ---------------------------------
+
+    def remembered_preset(self, host_id: str) -> Optional[SubmitPreset]:
+        """The preset Settings says a new submission to this host opens on.
+
+        None for the default, an empty form; otherwise the host's starred
+        preset, or the one last submitted with -- whichever Settings picked.
+        """
+        mode = self.get_pref("submit_start_from", "empty")
+        key = {"last": "last_presets", "default": "default_presets"}.get(mode)
+        if not key or not host_id:
+            return None
+        preset = self.presets.get((self.get_pref(key, {}) or {}).get(host_id, ""))
+        return preset if preset is not None and preset.host_id == host_id else None
+
+    def default_preset_id(self, host_id: str) -> str:
+        return str((self.get_pref("default_presets", {}) or {}).get(host_id, "") or "")
+
+    def set_default_preset(self, host_id: str, preset_id: str) -> None:
+        """Star a preset for its host; an empty id clears the star."""
+        stored = dict(self.get_pref("default_presets", {}) or {})
+        if preset_id:
+            stored[host_id] = preset_id
+        else:
+            stored.pop(host_id, None)
+        self.set_pref("default_presets", stored)
+
+    def note_preset_used(self, host_id: str, preset_id: str) -> None:
+        """Remember the preset a submission to this host was made with."""
+        stored = dict(self.get_pref("last_presets", {}) or {})
+        if preset_id:
+            stored[host_id] = preset_id
+        else:
+            stored.pop(host_id, None)
+        if stored != (self.get_pref("last_presets", {}) or {}):
+            self.set_pref("last_presets", stored)
 
     def download_root(self) -> str:
         configured = str(self.get_pref("download_root", "") or "").strip()
