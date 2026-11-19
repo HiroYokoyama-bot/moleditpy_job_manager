@@ -57,6 +57,11 @@ from .runner import (
 from .store import JobsReload, JobStore
 from .submission_workflow import SubmissionWorkflow
 from .tasks import run_async, shutdown_pool
+
+#: The fetch pattern for "Download every output file": the whole job folder,
+#: subfolders included (as deep as any pattern may reach). The wrapper's own
+#: log stays on the host either way; see fetch_results.
+EVERY_OUTPUT = ("**",)
 from .transport import create_transport
 
 
@@ -162,6 +167,10 @@ class JobService(QObject):
         upload_files: Optional[List[str]] = None,
         force_run: bool = False,
         force_after_previous: bool = False,
+        *,
+        download_all: Optional[bool] = None,
+        beside_input: Optional[bool] = None,
+        download_root: Optional[str] = None,
     ) -> Job:
         """Create the job record and start the upload/submit on a worker.
 
@@ -197,6 +206,9 @@ class JobService(QObject):
             upload_files,
             force_run,
             force_after_previous,
+            download_all=download_all,
+            beside_input=beside_input,
+            download_root=download_root,
         )
 
     @staticmethod
@@ -336,14 +348,22 @@ class JobService(QObject):
             if host.is_job_server:
                 from .server_backend import backend_for
 
-                patterns = [glob.escape(name) for name in names] if names else job.fetch_globs
+                patterns = (
+                    [glob.escape(name) for name in names]
+                    if names
+                    else (list(EVERY_OUTPUT) if job.download_all else job.fetch_globs)
+                )
                 return backend_for(host).fetch(job, local_dir, patterns)
             transport = self.transport_for(host)
             try:
                 # An explicit set of names is passed as patterns, escaped so each
                 # matches only itself: a file called mol[1].out is otherwise a
                 # character class that never matches its own name.
-                patterns = [glob.escape(name) for name in names] if names else None
+                patterns = (
+                    [glob.escape(name) for name in names]
+                    if names
+                    else (list(EVERY_OUTPUT) if job.download_all else None)
+                )
                 return fetch_results(transport, job, local_dir, globs=patterns)
             finally:
                 transport.close()

@@ -106,7 +106,9 @@ DEFAULT_PREFS: Dict[str, Any] = {
     #: Results beside the job's input by default; download_root is the fallback.
     "download_beside_input": True,
     "auto_download": True,
-    "download_all_outputs": True,
+    #: Off: everything includes scratch files and checkpoints that can run to
+    #: gigabytes. Only the default; each submission chooses for itself.
+    "download_every_output": False,
     #: Off by default: a badge changes how MoleditPy looks in the task bar;
     #: the status bar counter is always there and costs nothing.
     "taskbar_badge": False,

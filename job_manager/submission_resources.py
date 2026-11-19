@@ -120,9 +120,9 @@ class SubmissionResources(QWidget):
         self.chk_download_all.setToolTip(
             "Fetch everything the job produced, ignoring the patterns above."
         )
-        self.chk_download_all.setChecked(bool(self.store.get_pref("download_all_outputs", True)))
+        self.chk_download_all.setChecked(bool(self.store.get_pref("download_every_output", True)))
         self.chk_download_all.toggled.connect(
-            lambda checked: self.store.set_pref("download_all_outputs", bool(checked))
+            lambda checked: self.store.set_pref("download_every_output", bool(checked))
         )
         self.chk_download_all.setEnabled(self.chk_auto_download.isChecked())
         self.chk_beside_input = QCheckBox(BESIDE_INPUT_TEXT)

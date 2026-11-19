@@ -248,7 +248,10 @@ def fetch_results(
         if parent and not os.path.isdir(parent):
             os.makedirs(parent, exist_ok=True)
         if os.path.realpath(target) in protected:
+            # Not written, but it is here: counted, so a download whose only
+            # match is the input does not read as "nothing downloaded".
             logging.debug("Job Manager: not overwriting the input file %s", name)
+            downloaded.append(target)
             continue
         # Into a part file, then renamed. Results land in the directory the
         # user is working in, so a transfer cut off half way would otherwise
@@ -265,11 +268,9 @@ def fetch_results(
 
 
 def _inside_directory(root: str, path: str) -> bool:
-    try:
-        return os.path.normcase(os.path.commonpath([root, path])) == os.path.normcase(root)
-    except ValueError:
-        # Windows junctions can point to a different drive.
-        return False
+    from .local_paths import is_within
+
+    return is_within(path, root)
 
 
 def _download_atomic(

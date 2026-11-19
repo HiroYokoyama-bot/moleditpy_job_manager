@@ -65,12 +65,9 @@ def describe_file_type(filename: str) -> str:
 
 def _is_within(path: str, root: str) -> bool:
     """Return whether ``path`` is inside ``root`` on the current OS."""
-    try:
-        return os.path.commonpath(
-            [os.path.normpath(path), os.path.normpath(root)]
-        ) == os.path.normpath(root)
-    except ValueError:
-        return False
+    from .local_paths import is_within
+
+    return is_within(path, root)
 
 
 def _relative_name(path: str, root: str) -> str:
@@ -432,6 +429,10 @@ class OutputFileSelectorDialog(QDialog):
                 continue
             local_key = "/".join(parts)
             listed.add(local_key)
+            if local_key not in local_map:
+                here = self._already_here(parts)
+                if here:
+                    local_map[local_key] = here
             item = self._remote_file_row(name, parts, local_map, mirror_dir)
             place(item, parts)
             if local_key == primary_name:
@@ -468,6 +469,36 @@ class OutputFileSelectorDialog(QDialog):
             status += f" ({local_only} no longer on the host)"
         self.lbl_status.setText(status + ".")
         self._apply_filter(self.txt_filter.text())
+
+    def _already_here(self, parts: Sequence[str]) -> str:
+        """A local copy of a host file that was never recorded as downloaded.
+
+        The job's own input is uploaded, not downloaded, so it was listed as
+        "not downloaded" although it sits right beside the results; and a file
+        already in the results folder (fetched by hand, or skipped because it
+        was the input) was offered for download again. A file in the results
+        folder counts only if it was written after the job was submitted, so
+        an earlier run's output of the same name is not taken for this one's.
+        """
+        if len(parts) == 1:
+            for path in self.job.input_files or []:
+                if path and os.path.basename(path) == parts[0] and os.path.isfile(path):
+                    return os.path.normpath(path)
+        inputs = [p for p in self.job.input_files or [] if p]
+        folder = self.job.local_dir or (os.path.dirname(inputs[0]) if inputs else "")
+        if not folder:
+            return ""
+        candidate = os.path.normpath(os.path.join(folder, *parts))
+        try:
+            written = os.path.getmtime(candidate)
+        except OSError:
+            return ""
+        if not os.path.isfile(candidate):
+            return ""
+        # Two minutes of slack for a host whose clock runs a little behind.
+        if self.job.submitted_at and written < self.job.submitted_at - 120:
+            return ""
+        return candidate
 
     @staticmethod
     def _size_of(path: str) -> str:

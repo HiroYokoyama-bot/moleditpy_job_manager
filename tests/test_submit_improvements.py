@@ -56,7 +56,7 @@ def test_submit_dialog_auto_download_persistence(service, qapp):
     assert dlg2.chk_auto_download.isChecked() is False
 
 
-def test_submit_dialog_download_all_outputs(service, qapp):
+def test_submit_dialog_download_every_output(service, qapp):
     host = HostProfile(id="h1", name="Host1")
     service.store.add_host(host)
 
@@ -64,7 +64,7 @@ def test_submit_dialog_download_all_outputs(service, qapp):
     assert dlg.chk_download_all.isChecked() is True
 
     dlg.chk_download_all.setChecked(False)
-    assert service.store.get_pref("download_all_outputs") is False
+    assert service.store.get_pref("download_every_output") is False
 
     dlg.txt_globs.setText("*.out, *.log")
     preset2 = dlg.collect_preset()
