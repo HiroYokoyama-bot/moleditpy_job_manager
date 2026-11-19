@@ -91,7 +91,8 @@ QPushButton:pressed, QToolButton[jobManagerAction="true"]:pressed {{
 
 QPushButton:disabled, QToolButton[jobManagerAction="true"]:disabled {{
     color: @DISABLED@;
-    border-color: palette(mid);
+    background: @BUTTON@;
+    border-color: @DISABLED@;
 }}
 
 QPushButton:checked, QToolButton[jobManagerAction="true"]:checked {{
@@ -173,7 +174,7 @@ QLineEdit:focus {{
 
 QLineEdit:disabled {{
     color: @DISABLED@;
-    background: palette(window);
+    background: @WINDOW@;
 }}
 
 /* --- spin box ------------------------------------------------------------- */
@@ -205,7 +206,7 @@ QSpinBox::down-button {{
 
 QSpinBox:disabled {{
     color: @DISABLED@;
-    background: palette(window);
+    background: @WINDOW@;
 }}
 
 /* --- combo box ------------------------------------------------------------ */
@@ -225,7 +226,7 @@ QComboBox:focus {{
 
 QComboBox:disabled {{
     color: @DISABLED@;
-    background: palette(window);
+    background: @WINDOW@;
 }}
 
 QComboBox QAbstractItemView {{
@@ -339,8 +340,9 @@ _FALLBACK_DISABLED = "#8c8c8c"
 
 def _blend(palette: QPalette, weight: float) -> str:
     """Window text mixed toward the window colour; *weight* is the text's share."""
-    text = palette.color(QPalette.ColorRole.WindowText)
-    back = palette.color(QPalette.ColorRole.Window)
+    active = QPalette.ColorGroup.Active
+    text = palette.color(active, QPalette.ColorRole.WindowText)
+    back = palette.color(active, QPalette.ColorRole.Window)
     mix = QColor(
         round(text.red() * weight + back.red() * (1 - weight)),
         round(text.green() * weight + back.green() * (1 - weight)),
@@ -369,10 +371,28 @@ def muted_text_color(palette: QPalette) -> str:
 def dialog_stylesheet(palette: QPalette = None) -> str:
     """The shared stylesheet, with secondary text matched to *palette*."""
     if palette is None:
-        muted, disabled = _FALLBACK_MUTED, _FALLBACK_DISABLED
+        tokens = {
+            "@MUTED@": _FALLBACK_MUTED,
+            "@DISABLED@": _FALLBACK_DISABLED,
+            "@BUTTON@": "palette(button)",
+            "@WINDOW@": "palette(window)",
+        }
     else:
-        muted, disabled = muted_text_color(palette), disabled_text_color(palette)
-    return _STYLESHEET_TEMPLATE.replace("@MUTED@", muted).replace("@DISABLED@", disabled)
+        # Disabled controls take every colour from the *active* group, as
+        # fixed hex. palette(...) inside a :disabled rule reads the disabled
+        # group, which some Linux platform themes fill with white -- disabled
+        # buttons came out as white text, border and all, on white.
+        active = QPalette.ColorGroup.Active
+        tokens = {
+            "@MUTED@": muted_text_color(palette),
+            "@DISABLED@": disabled_text_color(palette),
+            "@BUTTON@": palette.color(active, QPalette.ColorRole.Button).name(),
+            "@WINDOW@": palette.color(active, QPalette.ColorRole.Window).name(),
+        }
+    sheet = _STYLESHEET_TEMPLATE
+    for token, value in tokens.items():
+        sheet = sheet.replace(token, value)
+    return sheet
 
 
 DIALOG_STYLESHEET = dialog_stylesheet()

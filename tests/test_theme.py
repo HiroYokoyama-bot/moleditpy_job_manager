@@ -107,6 +107,30 @@ class TestThemeConstants(unittest.TestCase):
             self.assertLess(contrast(disabled, window), contrast(muted, window))
             self.assertGreaterEqual(contrast(disabled, window), 2.5)
 
+    def test_disabled_controls_ignore_a_white_disabled_palette(self):
+        # Some Linux platform themes fill the disabled colour group with
+        # white; palette(...) in a :disabled rule then drew white on white.
+        import re
+
+        from PySide6.QtGui import QColor, QPalette
+        from PySide6.QtWidgets import QStyleFactory
+
+        palette = QStyleFactory.create("Fusion").standardPalette()
+        for role in (
+            QPalette.ColorRole.Mid,
+            QPalette.ColorRole.Window,
+            QPalette.ColorRole.Button,
+            QPalette.ColorRole.ButtonText,
+            QPalette.ColorRole.WindowText,
+        ):
+            palette.setColor(QPalette.ColorGroup.Disabled, role, QColor("#ffffff"))
+        sheet = theme.dialog_stylesheet(palette)
+        disabled_rules = re.findall(r":disabled[^{]*\{([^}]*)\}", sheet)
+        self.assertEqual(len(disabled_rules), 4)
+        for body in disabled_rules:
+            self.assertNotIn("palette(", body)
+            self.assertNotIn("#ffffff", body)
+
     def test_mark_muted_tags_the_label_for_the_stylesheet(self):
         from PySide6.QtWidgets import QLabel
 
