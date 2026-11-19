@@ -144,6 +144,31 @@ class TestThemeConstants(unittest.TestCase):
         self.assertIn(f"border: 1px solid {border}", sheet)
         self.assertLess(QColor(border).lightness(), 200)
 
+    def test_a_system_palette_change_recolours_an_open_dialog(self):
+        # The colours are fixed hex computed from the palette, so a switch
+        # between light and dark must rebuild the sheet, not keep the old one.
+        from PySide6.QtCore import QEvent
+        from PySide6.QtGui import QColor, QPalette
+        from PySide6.QtWidgets import QApplication, QDialog, QStyleFactory
+
+        app = QApplication.instance()
+        original = app.palette()
+        self.addCleanup(app.setPalette, original)
+        light = QStyleFactory.create("Fusion").standardPalette()
+        app.setPalette(light)
+        dialog = QDialog()
+        self.addCleanup(dialog.deleteLater)
+        theme.apply_theme(dialog)
+        self.assertIn(theme.muted_text_color(light), dialog.styleSheet())
+
+        dark = QPalette(light)
+        dark.setColor(QPalette.ColorRole.Window, QColor("#202020"))
+        dark.setColor(QPalette.ColorRole.WindowText, QColor("#f0f0f0"))
+        app.setPalette(dark)
+        QApplication.sendEvent(dialog, QEvent(QEvent.Type.PaletteChange))
+        self.assertIn(theme.muted_text_color(dark), dialog.styleSheet())
+        self.assertNotIn(theme.muted_text_color(light), dialog.styleSheet())
+
     def test_mark_muted_tags_the_label_for_the_stylesheet(self):
         from PySide6.QtWidgets import QLabel
 
