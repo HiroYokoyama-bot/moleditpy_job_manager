@@ -154,11 +154,13 @@ class OutputFileSelectorDialog(QDialog):
         mark_muted(self.lbl_status)
         layout.addWidget(self.lbl_status)
 
-        box = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Open | QDialogButtonBox.StandardButton.Close
-        )
-        self.btn_text = box.button(QDialogButtonBox.StandardButton.Open)
-        self.btn_text.setText("Open in Text Viewer")
+        box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        # A plain action button, not StandardButton.Open: Qt puts the accept
+        # role where each platform's convention wants it, which on GNOME,
+        # KDE and macOS is the right end, past the other actions. Action
+        # buttons keep the order they were added in everywhere.
+        self.btn_text = QPushButton("Open in Text Viewer")
+        box.addButton(self.btn_text, QDialogButtonBox.ButtonRole.ActionRole)
         self.btn_text.setToolTip("Read the selected non-binary file in the built-in text viewer.")
         self.btn_text.setEnabled(False)
         self.btn_text.clicked.connect(self._open_selected_as_text)

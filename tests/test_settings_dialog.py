@@ -61,7 +61,6 @@ class TestItHoldsEverything(SettingsTestCase):
         self.assertFalse(dialog.chk_notify.isChecked())
         self.assertTrue(dialog.chk_keep_tracking.isChecked())
         self.assertTrue(dialog.chk_taskbar_badge.isChecked())
-        self.assertTrue(dialog.chk_auto_open.isChecked())
         self.assertTrue(dialog.chk_flash.isChecked())
 
     def test_keep_tracking_is_named_as_the_docs_name_it(self):
@@ -102,9 +101,9 @@ class TestPolling(SettingsTestCase):
 
 
 class TestResults(SettingsTestCase):
-    def test_auto_open_is_saved(self):
-        self.dialog().chk_auto_open.setChecked(False)
-        self.assertFalse(self.saved("open_result_after_download"))
+    def test_opening_results_is_not_a_global_setting(self):
+        # It is chosen per job in the submit wizard.
+        self.assertFalse(hasattr(self.dialog(), "chk_auto_open"))
 
     def test_beside_the_input_is_saved(self):
         self.dialog().chk_beside_input.setChecked(False)

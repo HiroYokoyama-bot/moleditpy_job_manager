@@ -108,6 +108,13 @@ class SubmissionResources(QWidget):
         self.chk_auto_download = QCheckBox("Download results automatically when the job ends")
         self.chk_auto_download.setChecked(bool(self.store.get_pref("auto_download", True)))
         self.chk_auto_download.toggled.connect(self._on_auto_download_toggled)
+        # Not remembered between submissions: opening a result pulls MoleditPy
+        # to the front when the job ends, so it is asked for each time.
+        self.chk_open_result = QCheckBox("Open the results in MoleditPy when they arrive")
+        self.chk_open_result.setToolTip(
+            "For this job only, when its automatic download finishes. A file you "
+            "download or open yourself is opened only by what you used."
+        )
 
         self.chk_download_all = QCheckBox(DOWNLOAD_ALL_TEXT)
         self.chk_download_all.setToolTip(
@@ -231,6 +238,7 @@ class SubmissionResources(QWidget):
         command_layout.addWidget(self.cmb_template)
         form.addRow("Fetch patterns", self.txt_globs)
         form.addRow(self.chk_auto_download)
+        form.addRow(self.chk_open_result)
         form.addRow(self.chk_download_all)
         form.addRow(self.chk_beside_input)
         form.addRow("Default download dir", dl_root_row)

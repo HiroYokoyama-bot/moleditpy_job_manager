@@ -32,7 +32,7 @@ from PySide6.QtCore import QCoreApplication  # noqa: E402
 from PySide6.QtWidgets import QMessageBox  # noqa: E402
 from job_manager.submit_dialog import SubmitDialog  # noqa: E402
 
-from .fakes import FakeTransport, make_host, make_preset  # noqa: E402
+from .fakes import FakeTransport, make_host, make_job, make_preset  # noqa: E402
 from .test_poller import SyncPool  # noqa: E402
 
 
@@ -345,16 +345,60 @@ class TestJobsDialog(DialogTestCase):
             self.dialog.job_actions["settings"].trigger()
         shown.assert_called_once()
 
-    def test_results_ready_does_not_open_when_auto_open_is_off(self):
-        self.store.set_pref("open_result_after_download", False)
+    def _job_opening_results(self, open_result):
+        job = make_job(id="j1", preset=make_preset(open_result=open_result).to_dict())
+        self.store.add_job(job)
+        return job
+
+    def test_results_ready_does_not_open_when_the_job_did_not_ask(self):
+        self._job_opening_results(False)
+        with patch("job_manager.jobs_dialog.open_in_host") as opener:
+            self.service.auto_results_ready.emit("j1", ["/tmp/a.out"])
+        opener.assert_not_called()
+
+    def test_results_ready_does_not_open_for_a_job_from_before_the_choice(self):
+        self.store.add_job(make_job(id="j1", preset={}))
+        with patch("job_manager.jobs_dialog.open_in_host") as opener:
+            self.service.auto_results_ready.emit("j1", ["/tmp/a.out"])
+        opener.assert_not_called()
+
+    def test_open_in_moleditpy_on_an_undownloaded_file_opens_it_once(self):
+        # The File Browser downloads the file and opens it through this
+        # window; this window then opened it again on results_ready.
+        from job_manager.output_file_dialog import OutputFileSelectorDialog
+
+        job = self._job_opening_results(True)
+        local = os.path.join(self.tmp, "a.out")
+        with open(local, "w", encoding="utf-8") as handle:
+            handle.write("result")
+        browser = OutputFileSelectorDialog(
+            self.service,
+            job,
+            parent=self.dialog,
+            on_open_callback=lambda path: self.dialog.open_result_files([path]),
+        )
+        self.addCleanup(browser.deleteLater)
+
+        def fake_download(target, names=None, **kwargs):
+            self.service.results_ready.emit(target.id, [local])
+            return True
+
+        with patch.object(self.service, "download", side_effect=fake_download):
+            with patch("job_manager.jobs_dialog.open_in_host", return_value=True) as opener:
+                browser._download_and_open(None, "a.out")
+        opener.assert_called_once_with(local)
+
+    def test_a_download_the_user_asked_for_is_not_opened_again(self):
+        # File Browser's Open downloads the file and opens it itself.
+        self._job_opening_results(True)
         with patch("job_manager.jobs_dialog.open_in_host") as opener:
             self.service.results_ready.emit("j1", ["/tmp/a.out"])
         opener.assert_not_called()
 
-    def test_results_ready_opens_when_auto_open_is_on(self):
-        self.store.set_pref("open_result_after_download", True)
+    def test_results_ready_opens_when_the_job_asked(self):
+        self._job_opening_results(True)
         with patch("job_manager.jobs_dialog.open_in_host", return_value=True) as opener:
-            self.service.results_ready.emit("j1", ["/tmp/a.out"])
+            self.service.auto_results_ready.emit("j1", ["/tmp/a.out"])
         opener.assert_called_once_with("/tmp/a.out")
 
     def test_submit_without_a_host_offers_the_hosts_dialog(self):
@@ -876,6 +920,21 @@ class TestSubmitDialog(DialogTestCase):
         # The form is left as it was, not replaced by another preset.
         self.assertEqual(self.dialog.txt_queue.text(), "edited")
 
+    def test_opening_results_is_asked_per_job_and_starts_unticked(self):
+        self.assertFalse(self.dialog.chk_open_result.isChecked())
+        self.dialog.chk_open_result.setChecked(True)
+        self.assertTrue(self.dialog.collect_preset().open_result)
+        # Not carried into the next submission.
+        from job_manager.submit_dialog import SubmitDialog
+
+        again = SubmitDialog(self.service)
+        self.addCleanup(again.deleteLater)
+        self.assertFalse(again.chk_open_result.isChecked())
+
+    def test_a_resubmit_keeps_the_jobs_open_choice(self):
+        self.dialog.prefill(host_id=self.host.id, preset=make_preset(open_result=True).to_dict())
+        self.assertTrue(self.dialog.chk_open_result.isChecked())
+
     def test_new_preset_cannot_be_deleted(self):
         self.dialog.cmb_preset.setCurrentIndex(0)
         self.assertFalse(self.dialog.btn_delete_preset.isEnabled())
@@ -1205,13 +1264,16 @@ class TestTheMonitorReleasesTheServiceOnClose(DialogTestCase):
         self.assertEqual(self.service.receivers("2jobs_changed()"), before)
 
     def test_results_are_opened_once_not_once_per_window_ever_opened(self):
+        self.service.store.add_job(
+            make_job(id="job1", preset=make_preset(open_result=True).to_dict())
+        )
         opened = []
         with patch("job_manager.jobs_dialog.open_in_host", side_effect=lambda p: opened.append(p)):
             for _ in range(3):
                 JobsDialog(self.service).close()
             live = JobsDialog(self.service)
             self.addCleanup(live.close)
-            self.service.results_ready.emit("job1", [os.path.join(self.tmp, "result.out")])
+            self.service.auto_results_ready.emit("job1", [os.path.join(self.tmp, "result.out")])
         self.assertEqual(len(opened), 1, f"opened {len(opened)} times")
 
     def test_a_closed_window_stops_reloading_its_model(self):

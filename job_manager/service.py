@@ -74,6 +74,11 @@ class JobService(QObject):
     error = Signal(str)
     #: A finished job's files are on disk and ready to open.
     results_ready = Signal(str, list)  # job_id, local paths
+    #: The same, but only for the download that starts by itself when a job
+    #: ends. Opening a result follows this one: a download somebody asked for
+    #: (File Browser's Open, Download...) is opened by whoever asked, and
+    #: answering results_ready as well loaded the file twice.
+    auto_results_ready = Signal(str, list)  # job_id, local paths
     download_failed = Signal(str, str)  # job_id, message
     #: A tracked job reached a terminal state while the user was elsewhere.
     job_finished = Signal(str, str)  # job_id, state
@@ -241,7 +246,7 @@ class JobService(QObject):
         if finished and state != STATE_DONE:
             self._warn_stranded(job)
         if state in (STATE_DONE, STATE_FAILED) and job.auto_download and not job.downloaded:
-            self.download(job)
+            self.download(job, automatic=True)
 
     def _warn_stranded(self, job: Job) -> None:
         """Say so when a failure has left the jobs behind it unable to start.
@@ -292,8 +297,17 @@ class JobService(QObject):
 
         run_async(self.pool, work, on_success=on_ok, on_error=on_error, owner=owner)
 
-    def download(self, job: Job, into: str = "", names: Optional[Sequence[str]] = None) -> bool:
+    def download(
+        self,
+        job: Job,
+        into: str = "",
+        names: Optional[Sequence[str]] = None,
+        automatic: bool = False,
+    ) -> bool:
         """Fetch the job's outputs; emits ``results_ready`` when they land.
+
+        ``automatic`` marks the download that follows a job's end on its own;
+        it also emits ``auto_results_ready``.
 
         ``into`` is the folder the user picked; without it, the automatic
         choice applies (beside the input, or the shared download folder).
@@ -352,6 +366,8 @@ class JobService(QObject):
             self.poller.start()
             self.message.emit(f"Downloaded {len(paths or [])} file(s) for {job.name}")
             self.results_ready.emit(job.id, list(paths or []))
+            if automatic:
+                self.auto_results_ready.emit(job.id, list(paths or []))
 
         def failed(message: str) -> None:
             self._downloads_in_flight.discard(job.id)

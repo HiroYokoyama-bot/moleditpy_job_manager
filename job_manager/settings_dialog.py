@@ -98,10 +98,6 @@ class SettingsDialog(QDialog):
     def _results_group(self) -> QGroupBox:
         group = QGroupBox("Results")
         form = QFormLayout(group)
-        self.chk_auto_open = self._tick(
-            "Open results in MoleditPy when they arrive", "open_result_after_download", True
-        )
-        form.addRow(self.chk_auto_open)
         self.chk_beside_input = self._tick(
             "Save results beside the input file", "download_beside_input", True
         )

@@ -616,6 +616,7 @@ class SubmitDialog(QDialog):
         self.resources = SubmissionResources(self.store, callbacks, self)
         self.btn_browse_download_root = self.resources.btn_browse_download_root
         self.chk_auto_download = self.resources.chk_auto_download
+        self.chk_open_result = self.resources.chk_open_result
         self.chk_beside_input = self.resources.chk_beside_input
         self.chk_chain = self.resources.chk_chain
         self.chk_chain_any = self.resources.chk_chain_any
@@ -994,6 +995,7 @@ class SubmitDialog(QDialog):
             self.chk_auto_download.setChecked(bool(self.store.get_pref("auto_download", True)))
         else:
             self.chk_auto_download.setChecked(bool(preset.auto_download))
+        self.chk_open_result.setChecked(bool(preset.open_result))
 
     def collect_preset(self) -> SubmitPreset:
         host = self.current_host()
@@ -1019,6 +1021,7 @@ class SubmitDialog(QDialog):
             submit_options=self.txt_submit_options.text().strip(),
             fetch_globs=globs,
             auto_download=bool(self.chk_auto_download.isChecked()),
+            open_result=bool(self.chk_open_result.isChecked()),
         )
         return preset
 

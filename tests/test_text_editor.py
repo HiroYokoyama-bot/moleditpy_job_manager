@@ -315,6 +315,38 @@ class TestTheBrowserButtons(DialogTestCase):
         self.assertEqual(dialog.btn_open.text(), "Open in MoleditPy")
         self.assertLess(dialog.btn_text.x(), dialog.btn_open.x())
 
+    def test_the_order_is_the_same_under_every_platform_button_layout(self):
+        # As StandardButton.Open the text viewer went to the right end on
+        # GNOME, KDE and macOS, past Close or the other actions.
+        from PySide6.QtWidgets import QProxyStyle, QStyle
+
+        class Layout(QProxyStyle):
+            def __init__(self, layout):
+                super().__init__("Fusion")
+                self.layout = layout
+
+            def styleHint(self, hint, *args):
+                if hint == QStyle.StyleHint.SH_DialogButtonLayout:
+                    return self.layout
+                return super().styleHint(hint, *args)
+
+        with patch("job_manager.get_context", return_value=object()):
+            dialog = OutputFileSelectorDialog(self.service, make_job())
+        self.addCleanup(dialog.deleteLater)
+        box = dialog.btn_close.parentWidget()
+        orders = set()
+        for layout in range(4):  # Windows, macOS, KDE, GNOME
+            style = Layout(layout)
+            self.addCleanup(style.deleteLater)
+            box.setStyle(style)
+            dialog.show()
+            QApplication.instance().processEvents()
+            visible = [b for b in box.buttons() if b.isVisible()]
+            orders.add(tuple(b.text() for b in sorted(visible, key=lambda b: b.x())))
+            self.assertEqual(sorted(visible, key=lambda b: b.x())[0], dialog.btn_text)
+        dialog.hide()
+        self.assertEqual(len(orders), 1, orders)
+
 
 class TestEditing(EditorCase):
     def editing(self, data: bytes = b"cat\nCAT\ncat\n") -> TextEditorDialog:
