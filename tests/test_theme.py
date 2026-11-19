@@ -131,6 +131,19 @@ class TestThemeConstants(unittest.TestCase):
             self.assertNotIn("palette(", body)
             self.assertNotIn("#ffffff", body)
 
+    def test_borders_survive_a_white_mid_shade(self):
+        # A platform theme with a white Mid erased every button outline.
+        from PySide6.QtGui import QColor, QPalette
+        from PySide6.QtWidgets import QStyleFactory
+
+        palette = QStyleFactory.create("Fusion").standardPalette()
+        palette.setColor(QPalette.ColorRole.Mid, QColor("#ffffff"))
+        sheet = theme.dialog_stylesheet(palette)
+        self.assertNotIn("palette(mid)", sheet)
+        border = theme.border_color(palette)
+        self.assertIn(f"border: 1px solid {border}", sheet)
+        self.assertLess(QColor(border).lightness(), 200)
+
     def test_mark_muted_tags_the_label_for_the_stylesheet(self):
         from PySide6.QtWidgets import QLabel
 
