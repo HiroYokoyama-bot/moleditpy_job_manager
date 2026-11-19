@@ -294,6 +294,20 @@ class TestJobsDialog(DialogTestCase):
         self.dialog = JobsDialog(self.service)
         self.addCleanup(self.dialog.deleteLater)
 
+    def _auto_open(self, paths, inputs):
+        job = make_job(input_files=inputs, preset={"open_result": True})
+        self.store.add_job(job)
+        opened = []
+        self.dialog.open_result_files = lambda files: opened.append(files) or True
+        self.dialog._on_results_ready(job.id, paths)
+        return opened
+
+    def test_the_input_is_never_opened_as_the_result(self):
+        source = os.path.join(self.tmp, "mol.xyz")
+        result = os.path.join(self.tmp, "mol.out")
+        self.assertEqual(self._auto_open([source, result], [source]), [[result]])
+        self.assertEqual(self._auto_open([source], [source]), [])
+
     def test_buttons_are_disabled_without_a_selection(self):
         self.assertFalse(self.dialog.job_actions["cancel"].isEnabled())
         self.assertFalse(self.dialog.btn_download.isEnabled())
@@ -515,13 +529,12 @@ class TestHostsDialog(DialogTestCase):
         self.assertIn("1 command template(s)", ask.call_args.args[2])
 
     def test_command_templates_open_on_the_selected_host(self):
-        with patch("job_manager.template_editor_dialog.TemplateEditorDialog.exec"):
-            with patch(
-                "job_manager.template_editor_dialog.TemplateEditorDialog.__init__",
-                return_value=None,
-            ) as build:
-                self.dialog._open_templates()
-        self.assertEqual(build.call_args.kwargs["host_id"], self.host.id)
+        # The whole class is replaced: an __init__ patched to do nothing leaves a
+        # Qt wrapper with no C++ object, which aborts the interpreter at exit.
+        with patch("job_manager.template_editor_dialog.TemplateEditorDialog") as editor:
+            self.dialog._open_templates()
+        self.assertEqual(editor.call_args.kwargs["host_id"], self.host.id)
+        editor.return_value.exec.assert_called_once()
 
     def test_openssh_hint_warns_about_batch_mode(self):
         self.dialog.cmb_backend.setCurrentIndex(0)

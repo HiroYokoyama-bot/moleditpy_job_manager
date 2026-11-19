@@ -384,10 +384,15 @@ class TestTheWizardReadsTheInput(DialogTestCase):
         self.assertEqual(dialog.spin_cpus.value(), 1)
         self.assertFalse(dialog.lbl_scanned.isVisibleTo(dialog))
 
-    def test_the_choice_is_remembered(self):
+    def test_unticking_is_for_this_submission_only(self):
+        # The default lives in Settings > Submit; the wizard no longer rewrites it.
         dialog = self.dialog()
         dialog.chk_scan_resources.setChecked(False)
-        self.assertFalse(self.store.get_pref("scan_resources", True))
+        self.assertTrue(self.store.get_pref("scan_resources", True))
+        self.assertTrue(self.dialog().chk_scan_resources.isChecked())
+
+    def test_the_settings_default_is_used(self):
+        self.store.set_pref("scan_resources", False)
         self.assertFalse(self.dialog().chk_scan_resources.isChecked())
 
     def test_ticking_it_reads_the_file_already_chosen(self):
