@@ -319,7 +319,7 @@ Everything is stored in `settings.json` next to your hosts and presets.
 
 - **New submission starts from** -- an empty form (the default), the preset
   last used on that host, or the host's default preset. Mark a preset as the
-  host's default with the **★** button beside the preset list. Resubmit and an
+  host's default with the **☆ Default** button beside the preset list. Resubmit and an
   input generator's handoff always start from their own settings.
 - The starting state of the wizard's boxes: automatic download, **Download
   every output file**, taking cores and memory from the input, opening the

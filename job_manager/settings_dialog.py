@@ -116,7 +116,7 @@ class SettingsDialog(QDialog):
     START_FROM = (
         ("empty", "An empty form"),
         ("last", "The preset last used on that host"),
-        ("default", "The host's default preset (\u2605 in the submit window)"),
+        ("default", "The host's default preset (\u2605 Default in the submit window)"),
     )
 
     def _submit_group(self) -> QGroupBox:

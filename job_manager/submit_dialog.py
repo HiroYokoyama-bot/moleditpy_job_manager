@@ -305,10 +305,12 @@ class SubmitDialog(QDialog):
         self.btn_delete_preset.setToolTip("Delete the selected preset.")
         self.btn_delete_preset.clicked.connect(self._delete_preset)
         self.btn_delete_preset.setEnabled(False)
-        self.btn_default_preset = QPushButton("\u2605")
+        self.btn_default_preset = QPushButton()
         self.btn_default_preset.setCheckable(True)
         self.btn_default_preset.setEnabled(False)
-        self.btn_default_preset.setMaximumWidth(32)
+        # The glyph carries the state: a highlighted button alone did not read as on/off.
+        self.btn_default_preset.toggled.connect(self._label_default_star)
+        self._label_default_star(False)
         self.btn_default_preset.setToolTip(
             "This host's default preset. A new submission opens on it when Settings "
             "says to start from the host's default preset."
@@ -1011,6 +1013,9 @@ class SubmitDialog(QDialog):
         self.btn_default_preset.setChecked(
             bool(host and preset_id and self.store.default_preset_id(host.id) == preset_id)
         )
+
+    def _label_default_star(self, checked: bool) -> None:
+        self.btn_default_preset.setText(("★" if checked else "☆") + " Default")
 
     def _toggle_default_preset(self, checked: bool) -> None:
         host = self.current_host()
