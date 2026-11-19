@@ -137,17 +137,17 @@ job directory rather than being copied somewhere else first. WSL is the one
 local backend this does not apply to: its root is a path inside the
 distribution's own filesystem, which Windows cannot open under that name.
 
-Everything that describes the *site* rather than the molecule comes back the
-next time you submit to the same host: queue, account, walltime, nodes, tasks,
-modules, pre-commands, extra directives, the command, the fetch patterns and
-whether results download by themselves. No preset needs naming for this — a
-preset is the deliberate, named version of the same idea, and one you have
-chosen always wins over what was merely used last.
+What describes the *site* rather than the molecule -- queue, account, walltime,
+nodes, tasks, modules, pre-commands, extra directives, the command and the fetch
+patterns -- is kept in a named preset. The previous submission's fields are not
+copied onto the next one. By default a new submission opens on an empty form;
+**Settings → Submit** can make it open on the preset last used on that host, or
+on the host's default preset (see *Defaults for a new submission* below). A
+preset you pick yourself always wins.
 
-**Cores and memory are the exception.** They describe the molecule, and with
-**Take these two from the input file** ticked they are read from the input each
-time, so last week's twelve cores are not carried onto a job that does not need
-them. Untick it and they are remembered like everything else.
+**Cores and memory** describe the molecule. With **Take these two from the
+input file** ticked they are read from the input each time, so last week's
+twelve cores are not carried onto a job that does not need them.
 
 ### Where the results go
 
@@ -288,10 +288,50 @@ what you want and much more often a file you forgot to add.
 
 ### Saving your own template
 
-Type a command, then **Template... → Save current command as...** and give it a
-name. It is stored in `settings.json` next to your hosts and presets, appears in
-the same dropdown from then on, and can be removed with **Delete a saved
-template...**.
+Type a command, then pick one of the two save entries in **Template...** and give
+it a name:
+
+- **Save current command for *host*...** keeps it to the host on the form. Use
+  this when the program lives at a different path on each machine.
+- **Save current command for every host...** offers it everywhere.
+
+The same pair exists for the per-extension default: **Use this command for
+every .inp on *host*** and **... on every host**. A host's own template or
+default is used there ahead of the one for every host. Templates are not tied
+to a program: any command can be saved, under any name.
+
+The dropdown lists the host's own templates first (marked `[host]`), then the
+ones for every host, then the built-ins. When you switch host, the command
+follows: if it was filled in automatically, the new host's own default
+replaces it. A command you typed or picked yourself is left alone.
+
+**Manage templates...** (also in **Settings → Submit → Command Templates...**
+and **Hosts → Command Templates...**) lists them all, with a **Host** filter
+that shows what one host gets. Each entry can be edited, deleted, or started as
+a host's own with **Copy to host...**. Removing a host removes its own
+templates and defaults with it; the ones for every host stay.
+
+Everything is stored in `settings.json` next to your hosts and presets.
+
+### Defaults for a new submission
+
+**Settings → Submit** holds what each new submission starts with:
+
+- **New submission starts from** -- an empty form (the default), the preset
+  last used on that host, or the host's default preset. Mark a preset as the
+  host's default with the **★** button beside the preset list. Resubmit and an
+  input generator's handoff always start from their own settings.
+- The starting state of the wizard's boxes: automatic download, **Download
+  every output file**, taking cores and memory from the input, opening the
+  results in MoleditPy, and the warning before submitting an input again.
+
+Ticking or unticking a box in the submit wizard changes it for that job only;
+the next submission starts from Settings again.
+
+**Download every output file** fetches everything the job directory holds,
+subfolders included, instead of just the fetch patterns. It is off by default
+because scratch files and checkpoints can be large. A download you start
+yourself with picked files still fetches only those.
 
 ### Running on this machine
 
@@ -941,9 +981,9 @@ When a job was submitted with **Open the results in MoleditPy when they arrive**
 ticked, the most interesting file — `.out`, then `.log`, `.fchk`, `.hess`,
 `.xyz` — is handed to the application's file openers when the automatic
 download at the job's end finishes, which is how ORCA Result Analyzer and the Gaussian analyzers pick it
-up. The box is in the submit wizard, below automatic download; it starts
-unticked for every submission and is kept with the job, so Resubmit and a saved
-preset carry it. It is not a global setting. A download you start yourself —
+up. The box is in the submit wizard, below automatic download. It starts
+unticked unless **Settings → Submit** says otherwise, and is kept with the job,
+so Resubmit and a saved preset carry it. A download you start yourself —
 **Download...**, or opening a file the File Browser has not fetched yet — is
 opened only by what you used, never a second time.
 
@@ -1191,23 +1231,24 @@ So:
 
 ### A saved command template does not appear
 
-The **Template...** dropdown is rebuilt from three sources, in this order: the
-built-in list, then a separator, then your own saved templates, then the two
-actions at the bottom. A template you saved and cannot see is almost always one
-of these:
+The **Template...** dropdown is rebuilt in this order: the host's own saved
+templates, then the ones for every host, a separator, the built-in list, and
+the actions at the bottom. A template you saved and cannot see is almost always
+one of these:
 
+- **You saved it for another host.** A template saved for one host appears only
+  while that host is selected. **Manage templates...** with the Host filter on
+  *All* shows every one.
 - **You saved it under a name that already existed.** Saving replaces a
-  template of the same name rather than adding a second one with it, so the
+  template of the same name and host rather than adding a second one, so the
   list gets no longer.
-- **The command field was empty when you pressed "Save current command as...".**
+- **The command field was empty when you saved.**
   Nothing is saved without a command, and the dialog says so rather than
   writing an empty entry.
 - **You are looking at a different MoleditPy installation.** Templates live in
   `~/.moleditpy/job_manager/settings.json` under `command_templates`, outside
   the plugin folder, so they survive plugin updates — but they are per user
   account, not per project.
-- **The list is long and yours is below the fold.** Saved templates come after
-  every built-in one; the dropdown scrolls.
 
 To check what is actually stored:
 

@@ -57,12 +57,13 @@ from .runner import (
 from .store import JobsReload, JobStore
 from .submission_workflow import SubmissionWorkflow
 from .tasks import run_async, shutdown_pool
+from .transport import create_transport
+
 
 #: The fetch pattern for "Download every output file": the whole job folder,
 #: subfolders included (as deep as any pattern may reach). The wrapper's own
 #: log stays on the host either way; see fetch_results.
 EVERY_OUTPUT = ("**",)
-from .transport import create_transport
 
 
 def not_waiting(job: Job) -> str:

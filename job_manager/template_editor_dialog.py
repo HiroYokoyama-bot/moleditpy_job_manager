@@ -6,6 +6,11 @@ wizard's dropdown -- a saved template could be deleted one at a time through a
 QInputDialog picker, but a per-extension default had no delete path in the UI
 at all short of editing settings.json by hand. This dialog lists both, and
 lets either be edited or removed.
+
+Either kind may belong to one host (``host_id``) or to every host. A host's
+own is used there ahead of the one for every host, so the same program can be
+run from a different path on each machine; the Host filter shows one host's
+view, and Copy to host... starts a host's own from an existing one.
 """
 
 from __future__ import annotations
@@ -14,6 +19,7 @@ from typing import Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QGroupBox,
@@ -82,14 +88,21 @@ def show_placeholder_help(parent: Optional[QWidget] = None) -> None:
 EXT_ROLE = Qt.ItemDataRole.UserRole
 CMD_ROLE = Qt.ItemDataRole.UserRole + 1
 GLOBS_ROLE = Qt.ItemDataRole.UserRole + 2
+HOST_ROLE = Qt.ItemDataRole.UserRole + 3
+
+#: Filter values that are not a host id.
+ALL_SCOPES = None
+EVERY_HOST = ""
 
 
 class TemplateEditorDialog(QDialog):
     """Manage per-extension default commands and named command templates."""
 
-    def __init__(self, store, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, store, parent: Optional[QWidget] = None, host_id: str = "") -> None:
         super().__init__(parent)
         self.store = store
+        #: Opened from a host (the submit wizard, or Hosts): show that host's view.
+        self._initial_host = host_id
         self.setWindowTitle(f"Job Manager {PLUGIN_VERSION} - Command Templates")
         make_independent(self)
         apply_theme(self)
@@ -103,11 +116,25 @@ class TemplateEditorDialog(QDialog):
         hint = QLabel(
             "Commands you have told the submit wizard to remember: one per "
             "input extension ('use this for every .inp'), and any you saved "
-            "under a name of your own."
+            "under a name of your own. Each is for every host or for one host; "
+            "a host's own is used there first."
         )
         hint.setWordWrap(True)
         mark_muted(hint)
         layout.addWidget(hint)
+
+        filter_row = QHBoxLayout()
+        filter_row.addWidget(QLabel("Host"))
+        self.cmb_host = QComboBox()
+        self.cmb_host.addItem("All", ALL_SCOPES)
+        self.cmb_host.addItem("Every host (shared)", EVERY_HOST)
+        for host in self._hosts():
+            self.cmb_host.addItem(host.name, host.id)
+        found = self.cmb_host.findData(self._initial_host) if self._initial_host else -1
+        self.cmb_host.setCurrentIndex(found if found >= 0 else 0)
+        self.cmb_host.currentIndexChanged.connect(lambda _index: self._reload())
+        filter_row.addWidget(self.cmb_host, 1)
+        layout.addLayout(filter_row)
 
         defaults_box = QGroupBox("Default command per extension")
         defaults_layout = QVBoxLayout(defaults_box)
@@ -120,7 +147,11 @@ class TemplateEditorDialog(QDialog):
         btn_edit_default.clicked.connect(self._edit_selected_default)
         btn_delete_default = QPushButton("Delete")
         btn_delete_default.clicked.connect(self._delete_selected_default)
+        btn_copy_default = QPushButton("Copy to host...")
+        btn_copy_default.setToolTip("Start a host's own default from this one.")
+        btn_copy_default.clicked.connect(self._copy_selected_default)
         defaults_buttons.addWidget(btn_edit_default)
+        defaults_buttons.addWidget(btn_copy_default)
         defaults_buttons.addWidget(btn_delete_default)
         defaults_buttons.addStretch(1)
         defaults_layout.addLayout(defaults_buttons)
@@ -137,7 +168,11 @@ class TemplateEditorDialog(QDialog):
         btn_edit_template.clicked.connect(self._edit_selected_template)
         btn_delete_template = QPushButton("Delete")
         btn_delete_template.clicked.connect(self._delete_selected_template)
+        btn_copy_template = QPushButton("Copy to host...")
+        btn_copy_template.setToolTip("Start a host's own template from this one.")
+        btn_copy_template.clicked.connect(self._copy_selected_template)
         templates_buttons.addWidget(btn_edit_template)
+        templates_buttons.addWidget(btn_copy_template)
         templates_buttons.addWidget(btn_delete_template)
         templates_buttons.addStretch(1)
         templates_layout.addLayout(templates_buttons)
@@ -150,39 +185,99 @@ class TemplateEditorDialog(QDialog):
 
     # --- loading --------------------------------------------------------
 
+    def _hosts(self):
+        host_list = getattr(self.store, "host_list", None)
+        return list(host_list()) if callable(host_list) else []
+
+    def _host_name(self, host_id: str) -> str:
+        if not host_id:
+            return "every host"
+        host = getattr(self.store, "hosts", {}).get(host_id)
+        return host.name if host is not None else "removed host"
+
+    def _shown(self, host_id: str) -> bool:
+        """Whether the Host filter shows an entry for ``host_id`` ("" = every host)."""
+        wanted = self.cmb_host.currentData()
+        if wanted is ALL_SCOPES:
+            return True
+        if wanted == EVERY_HOST:
+            return not host_id
+        # One host's view: what that host actually gets, its own and the shared.
+        return host_id in ("", wanted)
+
+    def _item(self, key: str, command: str, globs, host_id: str) -> QListWidgetItem:
+        item = QListWidgetItem(f"[{self._host_name(host_id)}]  {key}  \u2192  {command}")
+        item.setData(EXT_ROLE, key)
+        item.setData(CMD_ROLE, command)
+        item.setData(GLOBS_ROLE, list(globs or []))
+        item.setData(HOST_ROLE, host_id)
+        item.setToolTip(command)
+        return item
+
     def _reload(self) -> None:
         self.list_defaults.clear()
+        entries = []
         defaults = self.store.get_pref("default_commands", {}) or {}
         for extension in sorted(defaults):
-            entry = defaults.get(extension) or {}
-            command = str(entry.get("command", ""))
-            globs = list(entry.get("fetch_globs") or [])
-            item = QListWidgetItem(f"{extension}  →  {command}")
-            item.setData(EXT_ROLE, extension)
-            item.setData(CMD_ROLE, command)
-            item.setData(GLOBS_ROLE, globs)
-            item.setToolTip(command)
-            self.list_defaults.addItem(item)
-        if not defaults:
-            placeholder = QListWidgetItem("No per-extension defaults yet.")
+            entries.append((EVERY_HOST, extension, defaults.get(extension) or {}))
+        names = {host.id: host.name.lower() for host in self._hosts()}
+        per_host = self.store.host_default_commands()
+        for host_id in sorted(per_host, key=lambda h: names.get(h, h)):
+            for extension in sorted(per_host[host_id]):
+                entries.append((host_id, extension, per_host[host_id][extension]))
+        shown = 0
+        for host_id, extension, entry in entries:
+            if not self._shown(host_id):
+                continue
+            self.list_defaults.addItem(
+                self._item(
+                    extension,
+                    str(entry.get("command", "")),
+                    entry.get("fetch_globs"),
+                    host_id,
+                )
+            )
+            shown += 1
+        if not shown:
+            placeholder = QListWidgetItem("No per-extension defaults here yet.")
             placeholder.setFlags(Qt.ItemFlag.NoItemFlags)
             self.list_defaults.addItem(placeholder)
 
         self.list_templates.clear()
-        templates = self.store.user_templates()
-        for entry in templates:
-            label = entry.get("label", "")
-            command = entry.get("command", "")
-            item = QListWidgetItem(f"{label}  →  {command}")
-            item.setData(EXT_ROLE, label)
-            item.setData(CMD_ROLE, command)
-            item.setData(GLOBS_ROLE, list(entry.get("fetch_globs") or []))
-            item.setToolTip(command)
-            self.list_templates.addItem(item)
-        if not templates:
-            placeholder = QListWidgetItem("No saved templates yet.")
+        shown = 0
+        for entry in self.store.user_templates():
+            host_id = entry.get("host_id", "")
+            if not self._shown(host_id):
+                continue
+            self.list_templates.addItem(
+                self._item(
+                    entry.get("label", ""),
+                    entry.get("command", ""),
+                    entry.get("fetch_globs"),
+                    host_id,
+                )
+            )
+            shown += 1
+        if not shown:
+            placeholder = QListWidgetItem("No saved templates here yet.")
             placeholder.setFlags(Qt.ItemFlag.NoItemFlags)
             self.list_templates.addItem(placeholder)
+
+    def _choose_host(self, title: str) -> Optional[str]:
+        """A host id picked from the list, or None when cancelled or there is none."""
+        hosts = self._hosts()
+        if not hosts:
+            QMessageBox.information(self, title, "Add a host first.")
+            return None
+        names = [host.name for host in hosts]
+        current = self.cmb_host.currentData()
+        start = next((i for i, host in enumerate(hosts) if host.id == current), 0)
+        name, accepted = QInputDialog.getItem(
+            self, title, "Copy to which host?", names, start, False
+        )
+        if not accepted or not name:
+            return None
+        return hosts[names.index(name)].id
 
     # --- default commands -------------------------------------------------
 
@@ -204,7 +299,12 @@ class TemplateEditorDialog(QDialog):
         )
         if not accepted:
             return
-        self.store.set_default_command(extension, command.strip(), item.data(GLOBS_ROLE) or [])
+        self.store.set_default_command(
+            extension,
+            command.strip(),
+            item.data(GLOBS_ROLE) or [],
+            host_id=item.data(HOST_ROLE) or "",
+        )
         self._reload()
 
     def _delete_selected_default(self) -> None:
@@ -212,13 +312,30 @@ class TemplateEditorDialog(QDialog):
         extension = item.data(EXT_ROLE) if item is not None else None
         if not extension:
             return
+        host_id = item.data(HOST_ROLE) or ""
+        where = f" on {self._host_name(host_id)}" if host_id else ""
         confirm = QMessageBox.question(
-            self, "Delete default", f"Stop remembering a default command for {extension}?"
+            self,
+            "Delete default",
+            f"Stop remembering a default command for {extension}{where}?",
         )
         if confirm != QMessageBox.StandardButton.Yes:
             return
         # An empty command is what set_default_command treats as "forget it".
-        self.store.set_default_command(extension, "", [])
+        self.store.set_default_command(extension, "", [], host_id=host_id)
+        self._reload()
+
+    def _copy_selected_default(self) -> None:
+        item = self.list_defaults.currentItem()
+        extension = item.data(EXT_ROLE) if item is not None else None
+        if not extension:
+            return
+        host_id = self._choose_host("Copy default")
+        if host_id is None:
+            return
+        self.store.set_default_command(
+            extension, item.data(CMD_ROLE) or "", item.data(GLOBS_ROLE) or [], host_id=host_id
+        )
         self._reload()
 
     # --- named templates ----------------------------------------------------
@@ -241,7 +358,9 @@ class TemplateEditorDialog(QDialog):
         )
         if not accepted:
             return
-        self.store.add_user_template(label, command.strip(), item.data(GLOBS_ROLE) or [])
+        self.store.add_user_template(
+            label, command.strip(), item.data(GLOBS_ROLE) or [], host_id=item.data(HOST_ROLE) or ""
+        )
         self._reload()
 
     def _delete_selected_template(self) -> None:
@@ -249,10 +368,27 @@ class TemplateEditorDialog(QDialog):
         label = item.data(EXT_ROLE) if item is not None else None
         if not label:
             return
-        confirm = QMessageBox.question(self, "Delete template", f"Delete the template '{label}'?")
+        host_id = item.data(HOST_ROLE) or ""
+        where = f" for {self._host_name(host_id)}" if host_id else ""
+        confirm = QMessageBox.question(
+            self, "Delete template", f"Delete the template '{label}'{where}?"
+        )
         if confirm != QMessageBox.StandardButton.Yes:
             return
-        self.store.remove_user_template(label)
+        self.store.remove_user_template(label, host_id)
+        self._reload()
+
+    def _copy_selected_template(self) -> None:
+        item = self.list_templates.currentItem()
+        label = item.data(EXT_ROLE) if item is not None else None
+        if not label:
+            return
+        host_id = self._choose_host("Copy template")
+        if host_id is None:
+            return
+        self.store.add_user_template(
+            label, item.data(CMD_ROLE) or "", item.data(GLOBS_ROLE) or [], host_id=host_id
+        )
         self._reload()
 
 

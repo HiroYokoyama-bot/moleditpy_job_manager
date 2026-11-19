@@ -17,7 +17,7 @@ from job_manager.submission_resources import SubmissionResources  # noqa: E402
 from job_manager.submission_templates import SubmissionTemplates  # noqa: E402
 
 
-def test_download_controls_persist_preferences_without_a_submit_dialog(tmp_path):
+def test_download_controls_are_this_jobs_and_leave_the_defaults_alone(tmp_path):
     store = JobStore(str(tmp_path))
     callbacks = {
         name: Mock()
@@ -33,11 +33,11 @@ def test_download_controls_persist_preferences_without_a_submit_dialog(tmp_path)
         panel.chk_auto_download.setChecked(False)
         assert not panel.chk_download_all.isEnabled()
         assert not panel.txt_download_root.isEnabled()
-        assert JobStore(str(tmp_path)).get_pref("auto_download") is False
+        # The default lives in Settings; unticking it for one job leaves it.
+        assert JobStore(str(tmp_path)).get_pref("auto_download") is True
         panel.chk_auto_download.setChecked(True)
         assert panel.chk_download_all.isEnabled()
         assert panel.txt_download_root.isEnabled()
-        assert JobStore(str(tmp_path)).get_pref("auto_download") is True
     finally:
         shiboken6.delete(panel)
 

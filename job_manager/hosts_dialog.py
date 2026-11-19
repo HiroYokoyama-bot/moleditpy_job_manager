@@ -195,7 +195,14 @@ class HostsDialog(QDialog):
         self.lbl_test = QLabel("")
         self.lbl_test.setTextFormat(Qt.TextFormat.PlainText)
         self.lbl_test.setWordWrap(True)
+        self.btn_templates = QPushButton("Command Templates...")
+        self.btn_templates.setToolTip(
+            "Commands for this host: its own templates and per-extension defaults, "
+            "used here ahead of the ones for every host."
+        )
+        self.btn_templates.clicked.connect(lambda: self._open_templates())
         action_row.addWidget(self.btn_test)
+        action_row.addWidget(self.btn_templates)
         action_row.addWidget(self.lbl_test, 1)
         right.addLayout(action_row)
 
@@ -499,10 +506,13 @@ class HostsDialog(QDialog):
         host = self._selected_host()
         if host is None:
             return
+        own = len([t for t in self.store.user_templates() if t.get("host_id") == host.id])
+        own += len(self.store.host_default_commands().get(host.id, {}))
+        commands = f", and its {own} command template(s) and default(s)," if own else ""
         confirm = QMessageBox.question(
             self,
             "Remove host",
-            f"Remove '{host.name}'? Presets for this host are removed too.\n"
+            f"Remove '{host.name}'? Presets for this host{commands} are removed too.\n"
             "Jobs already submitted stay in the list but can no longer be polled.",
         )
         if confirm != QMessageBox.StandardButton.Yes:
@@ -511,6 +521,13 @@ class HostsDialog(QDialog):
         # Do not keep a secret for a host that no longer exists.
         self.service.set_password(host.id, "")
         self._reload_list()
+
+    def _open_templates(self) -> None:
+        """The command templates, showing the selected host's view."""
+        from .template_editor_dialog import TemplateEditorDialog
+
+        host = self._selected_host()
+        TemplateEditorDialog(self.store, self, host_id=host.id if host else "").exec()
 
     # --- editing ------------------------------------------------------------
 

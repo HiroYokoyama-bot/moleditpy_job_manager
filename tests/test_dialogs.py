@@ -504,6 +504,25 @@ class TestHostsDialog(DialogTestCase):
             self.dialog._remove_host()
         self.assertEqual(self.store.hosts, {})
 
+    def test_removing_a_host_names_its_own_commands(self):
+        from PySide6.QtWidgets import QMessageBox
+
+        self.store.add_user_template("mine", "x", host_id=self.host.id)
+        with patch.object(
+            QMessageBox, "question", return_value=QMessageBox.StandardButton.No
+        ) as ask:
+            self.dialog._remove_host()
+        self.assertIn("1 command template(s)", ask.call_args.args[2])
+
+    def test_command_templates_open_on_the_selected_host(self):
+        with patch("job_manager.template_editor_dialog.TemplateEditorDialog.exec"):
+            with patch(
+                "job_manager.template_editor_dialog.TemplateEditorDialog.__init__",
+                return_value=None,
+            ) as build:
+                self.dialog._open_templates()
+        self.assertEqual(build.call_args.kwargs["host_id"], self.host.id)
+
     def test_openssh_hint_warns_about_batch_mode(self):
         self.dialog.cmb_backend.setCurrentIndex(0)
         self.assertIn("Batch mode", self.dialog.lbl_backend_hint.text())
@@ -1767,14 +1786,87 @@ class TestCommandTemplateDropdown(DialogTestCase):
 
     def test_saving_the_current_command(self):
         self.dialog.txt_command.setText("orca {input} > {output}")
-        with patch(
-            "job_manager.submission_templates.QInputDialog.getText", return_value=("Mine", True)
+        with (
+            patch(
+                "job_manager.submission_templates.QInputDialog.getText",
+                return_value=("Mine", True),
+            ),
         ):
             self.dialog._save_user_template()
         templates = JobStore(self.tmp).user_templates()
         self.assertEqual(len(templates), 1)
         self.assertEqual(templates[0]["label"], "Mine")
         self.assertEqual(templates[0]["command"], "orca {input} > {output}")
+        self.assertNotIn("host_id", templates[0])
+
+    def test_saving_for_this_host_only(self):
+        self.dialog.txt_command.setText("/opt/orca/orca {input} > {stem}.out")
+        with (
+            patch(
+                "job_manager.submission_templates.QInputDialog.getText",
+                return_value=("ORCA here", True),
+            ),
+        ):
+            self.dialog._save_user_template(this_host=True)
+        saved = JobStore(self.tmp).user_templates()
+        self.assertEqual(saved[0]["host_id"], self.host.id)
+        self.assertTrue(any("ORCA here" in label for label in self.labels()))
+
+    def test_both_save_entries_are_offered(self):
+        labels = self.labels()
+        self.assertIn(f"Save current command for {self.host.name}...", labels)
+        self.assertIn("Save current command for every host...", labels)
+
+    def _second_host(self):
+        other = make_host(id="h-other", name="zzz")
+        self.store.add_host(other)
+        self.dialog._reload_hosts()
+        return other
+
+    def _select(self, host):
+        self.dialog.cmb_host.setCurrentIndex(self.dialog.cmb_host.findData(host.id))
+
+    def test_switching_host_takes_that_hosts_command(self):
+        other = self._second_host()
+        self.store.set_default_command(".inp", "/here/orca {input}", host_id=self.host.id)
+        self.store.set_default_command(".inp", "/there/orca {input}", host_id=other.id)
+        self._select(self.host)
+        self.dialog.file_table.add_path(self.make_input())
+        self.dialog.txt_command.clear()
+        self.dialog._apply_suggested_template()
+        self.assertEqual(self.dialog.txt_command.text(), "/here/orca {input}")
+        self._select(other)
+        self.assertEqual(self.dialog.txt_command.text(), "/there/orca {input}")
+
+    def test_switching_host_keeps_a_typed_command(self):
+        other = self._second_host()
+        self.store.set_default_command(".inp", "/there/orca {input}", host_id=other.id)
+        self._select(self.host)
+        self.dialog.file_table.add_path(self.make_input())
+        self.dialog.txt_command.setText("my own {input}")
+        self._select(other)
+        self.assertEqual(self.dialog.txt_command.text(), "my own {input}")
+
+    def test_the_star_marks_the_hosts_default_preset(self):
+        preset = self.store.add_preset(make_preset(host_id=self.host.id, name="starred"))
+        self.dialog._on_host_changed()
+        self.assertFalse(self.dialog.btn_default_preset.isEnabled())
+        self.dialog.cmb_preset.setCurrentIndex(self.dialog.cmb_preset.findData(preset.id))
+        self.assertTrue(self.dialog.btn_default_preset.isEnabled())
+        self.dialog._toggle_default_preset(True)
+        self.assertEqual(JobStore(self.tmp).default_preset_id(self.host.id), preset.id)
+        self.dialog._toggle_default_preset(False)
+        self.assertEqual(JobStore(self.tmp).default_preset_id(self.host.id), "")
+
+    def test_a_new_form_opens_on_the_starred_preset_when_asked(self):
+        preset = self.store.add_preset(make_preset(host_id=self.host.id, name="starred"))
+        self.store.set_default_preset(self.host.id, preset.id)
+        self.dialog._on_host_changed()
+        self.assertEqual(self.dialog.cmb_preset.currentData(), "")
+        self.store.set_pref("submit_start_from", "default")
+        self.dialog._on_host_changed()
+        self.assertEqual(self.dialog.cmb_preset.currentData(), preset.id)
+        self.assertTrue(self.dialog.btn_default_preset.isChecked())
 
     def test_saving_an_empty_command_is_refused(self):
         self.dialog.txt_command.setText("   ")

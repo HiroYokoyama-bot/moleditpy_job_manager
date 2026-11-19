@@ -40,6 +40,9 @@ _SAVE_TEMPLATE = object()
 _DELETE_TEMPLATE = object()
 
 _SET_DEFAULT = object()
+#: The same two actions for the host on the form only.
+_SAVE_TEMPLATE_HOST = object()
+_SET_DEFAULT_HOST = object()
 
 _MANAGE_TEMPLATES = object()
 
