@@ -153,6 +153,9 @@ class SubmitDialog(QDialog):
         self._scanned_memory = ""
         self._scanned_cpus = 0
         self._server_check_pending = False
+        #: Set by a prefill that brings its own preset (Resubmit): the preset
+        #: Settings would open on must not be put over it.
+        self._explicit_preset = False
         self._build_ui()
         self.templates = SubmissionTemplates(
             self.store,
@@ -161,6 +164,7 @@ class SubmitDialog(QDialog):
             self.txt_globs,
             self.cmb_template,
             self,
+            current_host=self.current_host,
         )
         self._reload_templates()
         self._reload_hosts()
@@ -187,6 +191,8 @@ class SubmitDialog(QDialog):
         prefers a host with a local mirror over whichever was used last (see
         :meth:`Store.preferred_mirrored_host`).
         """
+        if preset:
+            self._explicit_preset = True
         if remote_dir:
             self.box_remote.setChecked(True)
             self.txt_remote_dir.setText(remote_dir)
@@ -217,6 +223,12 @@ class SubmitDialog(QDialog):
                 # override it.
                 self._host_chosen_by_user = not guessed
         if preset:
+            # The job's own settings, not a saved preset: showing a preset's
+            # name over them would let Save write them into that preset.
+            self.cmb_preset.blockSignals(True)
+            self.cmb_preset.setCurrentIndex(0)
+            self.cmb_preset.blockSignals(False)
+            self._sync_default_star()
             self._apply_preset(SubmitPreset.from_dict(preset))
         if files:
             self.file_table.setRowCount(0)
@@ -293,10 +305,22 @@ class SubmitDialog(QDialog):
         self.btn_delete_preset.setToolTip("Delete the selected preset.")
         self.btn_delete_preset.clicked.connect(self._delete_preset)
         self.btn_delete_preset.setEnabled(False)
+        self.btn_default_preset = QPushButton()
+        self.btn_default_preset.setCheckable(True)
+        self.btn_default_preset.setEnabled(False)
+        # The glyph carries the state: a highlighted button alone did not read as on/off.
+        self.btn_default_preset.toggled.connect(self._label_default_star)
+        self._label_default_star(False)
+        self.btn_default_preset.setToolTip(
+            "This host's default preset. A new submission opens on it when Settings "
+            "says to start from the host's default preset."
+        )
+        self.btn_default_preset.clicked.connect(self._toggle_default_preset)
         preset_row = QWidget()
         preset_layout = QHBoxLayout(preset_row)
         preset_layout.setContentsMargins(0, 0, 0, 0)
         preset_layout.addWidget(self.cmb_preset, 1)
+        preset_layout.addWidget(self.btn_default_preset)
         preset_layout.addWidget(self.btn_save_preset)
         preset_layout.addWidget(self.btn_delete_preset)
         self.txt_job_name = QLineEdit()
@@ -705,9 +729,23 @@ class SubmitDialog(QDialog):
         # A Job Server job may reserve no cores, for a script that only waits;
         # a queue system rejects a request for none.
         self.spin_cpus.setMinimum(0 if host is not None and host.is_job_server else 1)
-        # No preset is picked for the user: selecting the first one silently
-        # overwrote the form, including a resubmitted job's own settings.
-        self._on_preset_changed()
+        # No preset is picked for the user unless Settings asks for one:
+        # selecting the first one silently overwrote the form, including a
+        # resubmitted job's own settings.
+        remembered = (
+            self.store.remembered_preset(host.id)
+            if host is not None and not self._explicit_preset
+            else None
+        )
+        index = self.cmb_preset.findData(remembered.id) if remembered is not None else -1
+        if index > 0:
+            self.cmb_preset.setCurrentIndex(index)
+        else:
+            self._on_preset_changed()
+        templates = getattr(self, "templates", None)
+        if templates is not None:
+            templates.follow_host()
+            templates._reload_templates()
         self._update_queue_fields()
         self._update_force_row()
         self._update_chain_row()
@@ -967,9 +1005,30 @@ class SubmitDialog(QDialog):
             return self.store.chain_lane_tail(host.id, limit)
         return self.store.chain_tail(host.id)
 
+    def _sync_default_star(self) -> None:
+        """Show whether the selected preset is its host's default."""
+        host = self.current_host()
+        preset_id = self.cmb_preset.currentData() or ""
+        self.btn_default_preset.setEnabled(bool(host and preset_id))
+        self.btn_default_preset.setChecked(
+            bool(host and preset_id and self.store.default_preset_id(host.id) == preset_id)
+        )
+
+    def _label_default_star(self, checked: bool) -> None:
+        self.btn_default_preset.setText(("★" if checked else "☆") + " Default")
+
+    def _toggle_default_preset(self, checked: bool) -> None:
+        host = self.current_host()
+        preset_id = self.cmb_preset.currentData() or ""
+        if host is None or not preset_id:
+            self.btn_default_preset.setChecked(False)
+            return
+        self.store.set_default_preset(host.id, preset_id if checked else "")
+
     def _on_preset_changed(self) -> None:
         preset = self.store.presets.get(self.cmb_preset.currentData())
         self.btn_delete_preset.setEnabled(preset is not None)
+        self._sync_default_star()
         if preset is not None:
             self._apply_preset(preset)
         self._refresh_preview()
@@ -1045,8 +1104,8 @@ class SubmitDialog(QDialog):
         """Make this command what an input of that extension gets from now on."""
         return self.templates._set_default_for_extension()
 
-    def _save_user_template(self) -> None:
-        return self.templates._save_user_template()
+    def _save_user_template(self, this_host: bool = False) -> None:
+        return self.templates._save_user_template(this_host)
 
     def _delete_user_template(self) -> None:
         return self.templates._delete_user_template()
@@ -1221,8 +1280,7 @@ class SubmitDialog(QDialog):
             self.lbl_scanned.setVisible(True)
 
     def _on_scan_resources_toggled(self, checked: bool) -> None:
-        """Remember the choice, disable/enable inputs, and act on it for the file already chosen."""
-        self.store.set_pref("scan_resources", bool(checked))
+        """Disable/enable the inputs, and act on it for the file already chosen."""
         self.spin_cpus.setEnabled(not checked)
         self.txt_memory.setEnabled(not checked)
         if not checked:
@@ -1450,6 +1508,9 @@ class SubmitDialog(QDialog):
         self.cmb_preset.setCurrentIndex(0)
         self.cmb_preset.blockSignals(False)
         self.btn_delete_preset.setEnabled(False)
+        if self.store.default_preset_id(preset.host_id) == preset.id:
+            self.store.set_default_preset(preset.host_id, "")
+        self._sync_default_star()
 
     @staticmethod
     def _server_resource_overrun(resources: dict, preset: SubmitPreset) -> str:
@@ -1733,6 +1794,7 @@ class SubmitDialog(QDialog):
             upload_files=upload_files,
             force_run=self.force_requested(),
             force_after_previous=self.force_wait_requested(),
+            **self._download_choices(),
         )
         self._remember(host, preset)
         self.accept()
@@ -1779,17 +1841,29 @@ class SubmitDialog(QDialog):
                 chain_any=self.chain_any_requested(),
                 force_run=self.force_requested(),
                 force_after_previous=self.force_wait_requested(),
+                **self._download_choices(),
             )
         self._remember(host, preset)
 
     def _remember(self, host: HostProfile, preset: SubmitPreset) -> None:
         """Open the next submission on this host, not whichever sorts first.
 
-        Only the host. The form itself starts from the defaults every time,
-        with no preset chosen -- restoring the previous submission's fields
-        was tried and taken out -- so the fields are not stored either.
+        The host, and which saved preset this was made with (if any), for
+        Settings' "start from the preset last used". The fields themselves
+        are not stored: restoring a previous submission's fields was tried
+        and taken out.
         """
         self.store.set_pref("last_host_id", host.id)
+        self.store.note_preset_used(host.id, self.cmb_preset.currentData() or "")
+
+    def _download_choices(self) -> dict:
+        """Where and what this job downloads, as chosen in this window."""
+        downloads = self.chk_auto_download.isChecked()
+        return {
+            "download_all": downloads and self.chk_download_all.isChecked(),
+            "beside_input": self.chk_beside_input.isChecked(),
+            "download_root": self.txt_download_root.text().strip() or None,
+        }
 
     def _confirm_duplicate(self, files: List[str]) -> bool:
         """Warn when this input has been submitted before. False cancels.
@@ -1797,6 +1871,8 @@ class SubmitDialog(QDialog):
         Not for Resubmit, which is somebody asking for exactly that -- this
         catches the accidental double submission.
         """
+        if not self.store.get_pref("warn_duplicate_submission", True):
+            return True
         wanted = {os.path.abspath(path) for path in files if path}
         if not wanted:
             return True

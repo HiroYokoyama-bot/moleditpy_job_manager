@@ -43,28 +43,35 @@ def test_submit_dialog_scan_resources_disables_inputs(service, qapp):
     assert dlg.txt_memory.isEnabled()
 
 
-def test_submit_dialog_auto_download_persistence(service, qapp):
+def test_submit_dialog_auto_download_is_per_job(service, qapp):
     host = HostProfile(id="h1", name="Host1")
     service.store.add_host(host)
 
     dlg1 = SubmitDialog(service)
     dlg1.chk_auto_download.setChecked(False)
-    assert service.store.get_pref("auto_download") is False
+    assert service.store.get_pref("auto_download") is True
 
-    # Next submit dialog should open with False
+    # The next window opens on the Settings default, not on the last job's tick.
     dlg2 = SubmitDialog(service)
-    assert dlg2.chk_auto_download.isChecked() is False
+    assert dlg2.chk_auto_download.isChecked() is True
+
+    service.store.set_pref("auto_download", False)
+    assert SubmitDialog(service).chk_auto_download.isChecked() is False
 
 
-def test_submit_dialog_download_all_outputs(service, qapp):
+def test_submit_dialog_download_every_output(service, qapp):
     host = HostProfile(id="h1", name="Host1")
     service.store.add_host(host)
 
     dlg = SubmitDialog(service)
-    assert dlg.chk_download_all.isChecked() is True
+    # Off by default: everything includes scratch files and checkpoints.
+    assert dlg.chk_download_all.isChecked() is False
 
-    dlg.chk_download_all.setChecked(False)
-    assert service.store.get_pref("download_all_outputs") is False
+    dlg.chk_download_all.setChecked(True)
+    assert service.store.get_pref("download_every_output") is False
+    assert dlg._download_choices()["download_all"] is True
+    dlg.chk_auto_download.setChecked(False)
+    assert dlg._download_choices()["download_all"] is False
 
     dlg.txt_globs.setText("*.out, *.log")
     preset2 = dlg.collect_preset()

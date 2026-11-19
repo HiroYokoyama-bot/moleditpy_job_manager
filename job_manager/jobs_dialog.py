@@ -1680,7 +1680,11 @@ class JobsDialog(QDialog):
         job = self.service.store.jobs.get(job_id)
         if job is None or not (job.preset or {}).get("open_result"):
             return
-        self.open_result_files(paths)
+        # A download now lists the job's own input as present; it is not a result.
+        inputs = {os.path.normcase(os.path.normpath(p)) for p in job.input_files or [] if p}
+        results = [p for p in paths if os.path.normcase(os.path.normpath(p)) not in inputs]
+        if results:
+            self.open_result_files(results)
 
     def _log_name_for(self, paths: List[str]) -> str:
         """The wrapper log of whichever job these paths belong to, if known."""

@@ -10,8 +10,9 @@ Each control writes its preference as it changes, as the scattered ones did:
 there is nothing to apply and nothing lost by closing the window.
 
 Per-submission choices (which host, auto-download for this job) stay in the
-wizard, where they are made. The download location is here as well, since it
-is a standing default the wizard only shows.
+wizard, where they are made. Their defaults are here, under Submit: the wizard
+opens on them and changes them for one job only, so unticking a box for one
+submission no longer changes it for every later one.
 """
 
 from __future__ import annotations
@@ -19,8 +20,10 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -31,6 +34,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -56,8 +60,19 @@ class SettingsDialog(QDialog):
         self.standalone = standalone
         self.setWindowTitle(f"Job Manager {PLUGIN_VERSION} - Settings")
         apply_theme(self)
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        # Seven groups no longer fit a laptop screen; the buttons stay put.
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        body = QWidget()
+        scroll.setWidget(body)
+        outer.addWidget(scroll, 1)
+        layout = QVBoxLayout(body)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._polling_group())
+        layout.addWidget(self._submit_group())
         layout.addWidget(self._results_group())
         layout.addWidget(self._job_end_group())
         layout.addWidget(self._desktop_group())
@@ -66,7 +81,9 @@ class SettingsDialog(QDialog):
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(self.reject)
         buttons.accepted.connect(self.accept)
-        layout.addWidget(buttons)
+        outer.addWidget(buttons)
+        body.adjustSize()
+        self.resize(body.sizeHint().width() + 40, min(body.sizeHint().height() + 80, 760))
         self._update_interval_warning()
         self._sync_chat_controls()
         self._sync_api_status()
@@ -94,6 +111,75 @@ class SettingsDialog(QDialog):
         row.addWidget(self.lbl_interval_warning)
         row.addStretch(1)
         return group
+
+    #: Settings value, label, for "a new submission starts from".
+    START_FROM = (
+        ("empty", "An empty form"),
+        ("last", "The preset last used on that host"),
+        ("default", "The host's default preset (\u2605 Default in the submit window)"),
+    )
+
+    def _submit_group(self) -> QGroupBox:
+        group = QGroupBox("Submit")
+        form = QFormLayout(group)
+        self.cmb_start_from = QComboBox()
+        for value, label in self.START_FROM:
+            self.cmb_start_from.addItem(label, value)
+        found = self.cmb_start_from.findData(self.store.get_pref("submit_start_from", "empty"))
+        self.cmb_start_from.setCurrentIndex(max(0, found))
+        self.cmb_start_from.setToolTip(
+            "What the submit window fills in when it opens or the host changes. "
+            "Resubmit always starts from the job's own settings."
+        )
+        self.cmb_start_from.currentIndexChanged.connect(
+            lambda _index: self.store.set_pref(
+                "submit_start_from", self.cmb_start_from.currentData()
+            )
+        )
+        form.addRow("New submission starts from", self.cmb_start_from)
+        note = QLabel("Defaults for each new job; the submit window can change them for one job:")
+        note.setWordWrap(True)
+        form.addRow(note)
+        self.chk_default_auto_download = self._tick(
+            "Download results automatically when the job ends", "auto_download", True, False
+        )
+        form.addRow(self.chk_default_auto_download)
+        self.chk_default_download_all = self._tick(
+            "Download every output file, not just the fetch patterns",
+            "download_every_output",
+            False,
+            False,
+        )
+        self.chk_default_download_all.setToolTip(
+            "Everything the job wrote, subfolders included -- scratch files and "
+            "checkpoints too, which can be large."
+        )
+        form.addRow(self.chk_default_download_all)
+        self.chk_default_scan = self._tick(
+            "Take cores and memory from the input file", "scan_resources", True, False
+        )
+        form.addRow(self.chk_default_scan)
+        self.chk_default_open = self._tick(
+            "Open the results in MoleditPy when they arrive", "open_result_default", False, False
+        )
+        form.addRow(self.chk_default_open)
+        self.chk_warn_duplicate = self._tick(
+            "Ask before submitting an input that was submitted before",
+            "warn_duplicate_submission",
+            True,
+            False,
+        )
+        form.addRow(self.chk_warn_duplicate)
+        templates = QPushButton("Command Templates...")
+        templates.setToolTip("Saved commands and per-extension defaults, for every host or one.")
+        templates.clicked.connect(self._open_templates)
+        form.addRow(templates)
+        return group
+
+    def _open_templates(self) -> None:
+        from .template_editor_dialog import TemplateEditorDialog
+
+        TemplateEditorDialog(self.store, self).exec()
 
     def _results_group(self) -> QGroupBox:
         group = QGroupBox("Results")

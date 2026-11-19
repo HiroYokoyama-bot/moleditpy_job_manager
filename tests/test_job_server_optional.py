@@ -69,9 +69,15 @@ class TestOptionalServerClient(unittest.TestCase):
                 Path(target).write_text("downloaded", encoding="utf-8")
 
             backend.fetch_file = Mock(side_effect=fetch)
-            self.assertEqual(backend.fetch(job, directory, []), [str(root / "result.out")])
+            # The input is never overwritten, but it is listed as present:
+            # it was reported "not downloaded" while sitting in the folder.
+            self.assertEqual(
+                backend.fetch(job, directory, []),
+                [str(root / "input.xyz"), str(root / "result.out")],
+            )
             self.assertEqual(original.read_text(encoding="utf-8"), "original input")
-            self.assertEqual(backend.fetch(job, directory, ["input.xyz"]), [])
+            self.assertEqual(backend.fetch(job, directory, ["input.xyz"]), [str(original)])
+            self.assertEqual(original.read_text(encoding="utf-8"), "original input")
 
     def test_server_fetch_patterns_respect_subdirectories(self):
         with tempfile.TemporaryDirectory() as directory:

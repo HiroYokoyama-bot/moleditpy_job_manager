@@ -466,16 +466,9 @@ class HostProfile:
         so that is the host to offer them. The same is true, and more plainly
         so, of a file already inside a local host's own job root.
         """
-        root = self.local_root()
-        if not root or not path:
-            return False
-        try:
-            root = os.path.abspath(os.path.expanduser(root))
-            target = os.path.abspath(os.path.expanduser(path))
-            return os.path.commonpath([root, target]) == root
-        except (OSError, ValueError):
-            # Different drives on Windows, or a path that cannot be resolved.
-            return False
+        from .local_paths import is_within
+
+        return is_within(path, self.local_root())
 
     def mirrored_job_dir(self, remote_dir: str) -> str:
         """The directory on this machine holding this job's files, or "".
@@ -607,6 +600,9 @@ class Job:
     auto_download: bool = True
     downloaded: bool = False
     downloaded_files: List[str] = field(default_factory=list)
+    #: Fetch everything the job wrote, not just :attr:`fetch_globs`, when it
+    #: downloads by itself. Chosen per job in the submit wizard.
+    download_all: bool = False
     #: Relative to remote_dir; what "Tail Log" reads and what the round trip opens.
     log_file: str = ""
     command: str = ""

@@ -44,7 +44,15 @@ class TestItHoldsEverything(SettingsTestCase):
         titles = [group.title() for group in self.dialog().findChildren(QGroupBox)]
         self.assertEqual(
             titles,
-            ["Polling", "Results", "When a job ends", "Desktop", "Web Monitor", "Local API"],
+            [
+                "Polling",
+                "Submit",
+                "Results",
+                "When a job ends",
+                "Desktop",
+                "Web Monitor",
+                "Local API",
+            ],
         )
 
     def test_the_tray_process_offers_the_api_too(self):
@@ -98,6 +106,34 @@ class TestPolling(SettingsTestCase):
             dialog.spin_interval.setValue(300)
         reschedule.assert_called_once()
         self.assertEqual(self.saved("poll_interval"), 300)
+
+
+class TestSubmit(SettingsTestCase):
+    def test_a_new_submission_starts_empty_by_default(self):
+        self.assertEqual(self.dialog().cmb_start_from.currentData(), "empty")
+
+    def test_the_starting_point_is_saved(self):
+        dialog = self.dialog()
+        dialog.cmb_start_from.setCurrentIndex(dialog.cmb_start_from.findData("default"))
+        self.assertEqual(self.saved("submit_start_from"), "default")
+
+    def test_download_every_output_is_off_by_default(self):
+        dialog = self.dialog()
+        self.assertFalse(dialog.chk_default_download_all.isChecked())
+        dialog.chk_default_download_all.setChecked(True)
+        self.assertTrue(self.saved("download_every_output"))
+
+    def test_the_other_defaults_are_written(self):
+        dialog = self.dialog()
+        dialog.chk_default_open.setChecked(True)
+        dialog.chk_warn_duplicate.setChecked(False)
+        self.assertTrue(self.saved("open_result_default"))
+        self.assertFalse(self.saved("warn_duplicate_submission"))
+
+    def test_command_templates_open_from_here(self):
+        with patch("job_manager.template_editor_dialog.TemplateEditorDialog.exec") as run:
+            self.dialog()._open_templates()
+        run.assert_called_once()
 
 
 class TestResults(SettingsTestCase):

@@ -115,6 +115,70 @@ class TestNamedTemplates(TemplateEditorTestCase):
         self.assertEqual(self.store.user_templates(), [])
 
 
+class TestHostScope(unittest.TestCase):
+    def setUp(self):
+        from .fakes import make_host
+
+        self.tmp = tempfile.mkdtemp(prefix="template_editor_")
+        self.store = JobStore(self.tmp)
+        self.store.add_host(make_host(id="h1", name="aaa"))
+        self.store.add_host(make_host(id="h2", name="bbb"))
+        self.store.add_user_template("shared", "orca {input}")
+        self.store.add_user_template("mine", "/opt/orca {input}", host_id="h1")
+        self.store.set_default_command(".inp", "/opt/orca {input}", host_id="h2")
+
+    def dialog(self, host_id=""):
+        dialog = TemplateEditorDialog(self.store, host_id=host_id)
+        self.addCleanup(dialog.deleteLater)
+        return dialog
+
+    @staticmethod
+    def texts(widget):
+        return [widget.item(i).text() for i in range(widget.count())]
+
+    def test_all_shows_every_scope_with_its_host(self):
+        texts = self.texts(self.dialog().list_templates)
+        self.assertTrue(any(t.startswith("[every host]") and "shared" in t for t in texts))
+        self.assertTrue(any(t.startswith("[aaa]") and "mine" in t for t in texts))
+
+    def test_opened_from_a_host_shows_what_that_host_gets(self):
+        dialog = self.dialog("h2")
+        self.assertEqual(dialog.cmb_host.currentData(), "h2")
+        texts = self.texts(dialog.list_templates)
+        self.assertTrue(any("shared" in t for t in texts))
+        self.assertFalse(any("mine" in t for t in texts))
+        self.assertTrue(any(t.startswith("[bbb]") for t in self.texts(dialog.list_defaults)))
+
+    def test_copy_to_host(self):
+        dialog = self.dialog()
+        row = next(i for i, t in enumerate(self.texts(dialog.list_templates)) if "shared" in t)
+        dialog.list_templates.setCurrentRow(row)
+        with patch(
+            "job_manager.template_editor_dialog.QInputDialog.getItem", return_value=("bbb", True)
+        ):
+            dialog._copy_selected_template()
+        copied = [t for t in self.store.user_templates("h2") if t.get("host_id") == "h2"]
+        self.assertEqual([t["label"] for t in copied], ["shared"])
+
+    def test_deleting_a_hosts_own_leaves_the_shared(self):
+        self.store.add_user_template("shared", "/h1/orca {input}", host_id="h1")
+        dialog = self.dialog("h1")
+        row = next(
+            i
+            for i, t in enumerate(self.texts(dialog.list_templates))
+            if t.startswith("[aaa]") and "shared" in t
+        )
+        dialog.list_templates.setCurrentRow(row)
+        with patch(
+            "job_manager.template_editor_dialog.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.Yes,
+        ):
+            dialog._delete_selected_template()
+        labels = [(t["label"], t.get("host_id", "")) for t in self.store.user_templates()]
+        self.assertIn(("shared", ""), labels)
+        self.assertNotIn(("shared", "h1"), labels)
+
+
 class TestOpenFromTheSubmitWizard(unittest.TestCase):
     """The wizard's 'Manage templates...' entry reaches this dialog."""
 

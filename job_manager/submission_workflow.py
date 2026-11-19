@@ -41,8 +41,15 @@ class SubmissionWorkflow:
         upload_files: Optional[List[str]] = None,
         force_run: bool = False,
         force_after_previous: bool = False,
+        *,
+        download_all: Optional[bool] = None,
+        beside_input: Optional[bool] = None,
+        download_root: Optional[str] = None,
     ) -> Job:
         """Create the job record and start the upload/submit on a worker.
+
+        ``download_all``, ``beside_input`` and ``download_root`` are this
+        submission's own choices; ``None`` takes the default from Settings.
 
         ``after_job`` chains this one behind another job on the same host;
         ``chain_any`` accepts the predecessor merely ending, not succeeding.
@@ -82,7 +89,14 @@ class SubmissionWorkflow:
             input_files=list(local_files),
             fetch_globs=list(preset.fetch_globs),
             auto_download=preset.auto_download if auto_download is None else auto_download,
-            local_dir=self._local_dir_for(name or "job", local_files),
+            local_dir=self._local_dir_for(
+                name or "job", local_files, beside_input=beside_input, download_root=download_root
+            ),
+            download_all=bool(
+                self.service.store.get_pref("download_every_output", False)
+                if download_all is None
+                else download_all
+            ),
             preset=preset.to_dict(),
             after_job_id=after_job.id if after_job is not None else "",
             chain_any=bool(chain_any),
@@ -208,19 +222,30 @@ class SubmissionWorkflow:
             )
         return after_job.remote_job_id
 
-    def _local_dir_for(self, name: str, local_files: Optional[List[str]] = None) -> str:
+    def _local_dir_for(
+        self,
+        name: str,
+        local_files: Optional[List[str]] = None,
+        *,
+        beside_input: Optional[bool] = None,
+        download_root: Optional[str] = None,
+    ) -> str:
         """Where this job's results will land.
 
         Beside the input by default. Falls back to the download root when
         there's nothing to sit beside, or that directory isn't writable.
         """
-        if self.service.store.get_pref("download_beside_input", True):
+        if beside_input is None:
+            beside_input = bool(self.service.store.get_pref("download_beside_input", True))
+        if beside_input:
             for path in local_files or []:
                 directory = os.path.dirname(os.path.abspath(path))
                 if directory and os.path.isdir(directory) and os.access(directory, os.W_OK):
                     return directory
         stamp = time.strftime("%Y%m%d_%H%M%S")
-        return os.path.join(self.service.store.download_root(), f"{stamp}_{sanitize_name(name)}")
+        root = (download_root or "").strip()
+        root = os.path.expanduser(root) if root else self.service.store.download_root()
+        return os.path.join(root, f"{stamp}_{sanitize_name(name)}")
 
     def _on_submitted(self, job: Job) -> None:
         stored = self.service.store.jobs.get(job.id)

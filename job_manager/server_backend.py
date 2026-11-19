@@ -728,6 +728,8 @@ class JobServerBackend:
                 if not target.resolve().is_relative_to(directory.resolve()):
                     raise ValueError("Result escapes download directory")
                 if os.path.normcase(os.path.realpath(target)) in protected:
+                    # Already here; counted so the download is not "empty".
+                    fetched.append(str(target))
                     continue
                 self.fetch_file(job, relative, target)
                 fetched.append(str(target))

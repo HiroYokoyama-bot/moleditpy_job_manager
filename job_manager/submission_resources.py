@@ -108,9 +108,10 @@ class SubmissionResources(QWidget):
         self.chk_auto_download = QCheckBox("Download results automatically when the job ends")
         self.chk_auto_download.setChecked(bool(self.store.get_pref("auto_download", True)))
         self.chk_auto_download.toggled.connect(self._on_auto_download_toggled)
-        # Not remembered between submissions: opening a result pulls MoleditPy
-        # to the front when the job ends, so it is asked for each time.
+        # Off unless Settings says otherwise: opening a result pulls MoleditPy
+        # to the front when the job ends.
         self.chk_open_result = QCheckBox("Open the results in MoleditPy when they arrive")
+        self.chk_open_result.setChecked(bool(self.store.get_pref("open_result_default", False)))
         self.chk_open_result.setToolTip(
             "For this job only, when its automatic download finishes. A file you "
             "download or open yourself is opened only by what you used."
@@ -120,30 +121,22 @@ class SubmissionResources(QWidget):
         self.chk_download_all.setToolTip(
             "Fetch everything the job produced, ignoring the patterns above."
         )
-        self.chk_download_all.setChecked(bool(self.store.get_pref("download_all_outputs", True)))
-        self.chk_download_all.toggled.connect(
-            lambda checked: self.store.set_pref("download_all_outputs", bool(checked))
-        )
+        # The checkboxes here are this job's: the defaults live in Settings.
+        # Unticking one for a single job used to change it for every later job.
+        self.chk_download_all.setChecked(bool(self.store.get_pref("download_every_output", False)))
         self.chk_download_all.setEnabled(self.chk_auto_download.isChecked())
         self.chk_beside_input = QCheckBox(BESIDE_INPUT_TEXT)
         self.chk_beside_input.setToolTip(
             "Put the results next to the input file instead of in the download folder."
         )
         self.chk_beside_input.setChecked(bool(self.store.get_pref("download_beside_input", True)))
-        self.chk_beside_input.toggled.connect(
-            lambda checked: self.store.set_pref("download_beside_input", bool(checked))
-        )
         self.chk_beside_input.setEnabled(self.chk_auto_download.isChecked())
 
         self.txt_download_root = QLineEdit(self.store.get_pref("download_root", "") or "")
         self.txt_download_root.setPlaceholderText(self.store.download_root())
         self.txt_download_root.setToolTip(
-            "Default download directory when results are not placed next to the input file."
-        )
-        # editingFinished, not textChanged: a preference write fsyncs, and
-        # textChanged would fire one per keystroke.
-        self.txt_download_root.editingFinished.connect(
-            lambda: self.store.set_pref("download_root", self.txt_download_root.text().strip())
+            "Where this job's results go when they are not placed beside the input. "
+            "Empty uses the folder set in Settings."
         )
         self.txt_download_root.setEnabled(self.chk_auto_download.isChecked())
 
@@ -241,7 +234,7 @@ class SubmissionResources(QWidget):
         form.addRow(self.chk_open_result)
         form.addRow(self.chk_download_all)
         form.addRow(self.chk_beside_input)
-        form.addRow("Default download dir", dl_root_row)
+        form.addRow("Download folder", dl_root_row)
         form.addRow(self.chk_chain)
         form.addRow(self.chk_chain_any)
         form.addRow(self.lbl_chain)
@@ -254,11 +247,9 @@ class SubmissionResources(QWidget):
         path = QFileDialog.getExistingDirectory(self, "Default Download Directory", start)
         if path:
             self.txt_download_root.setText(path)
-            self.store.set_pref("download_root", path)
 
     def _on_auto_download_toggled(self, checked: bool) -> None:
-        """Remember the choice and enable/disable all dependent download controls."""
-        self.store.set_pref("auto_download", bool(checked))
+        """Enable or disable the controls that only matter with a download."""
         self.chk_download_all.setEnabled(checked)
         self.chk_beside_input.setEnabled(checked)
         off = "" if checked else "needs automatic download"

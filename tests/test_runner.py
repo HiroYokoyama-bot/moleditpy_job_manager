@@ -577,7 +577,19 @@ class TestAnInputIsNeverOverwritten(unittest.TestCase):
     def test_everything_else_still_comes_back(self):
         downloaded = runner.fetch_results(self.transport, self._job(), self.tmp)
 
-        self.assertEqual([os.path.basename(p) for p in downloaded], ["mol.out"])
+        # The input is counted as present (it is already here), not fetched.
+        self.assertEqual(sorted(os.path.basename(p) for p in downloaded), ["mol.out", "mol.xyz"])
+        self.assertEqual(
+            [remote for remote, _local in self.transport.downloads], ["/remote/opt/mol.out"]
+        )
+
+    def test_a_download_whose_only_match_is_the_input_still_counts(self):
+        job = self._job()
+        job.fetch_globs = ["*.xyz"]
+        downloaded = runner.fetch_results(self.transport, job, self.tmp)
+
+        self.assertEqual(downloaded, [os.path.join(self.tmp, "mol.xyz")])
+        self.assertEqual(self.transport.downloads, [])
 
     def test_the_same_name_elsewhere_is_downloaded_normally(self):
         # Only the job's *own* input is protected, not every file called that.
