@@ -928,10 +928,15 @@ avoid OpenBabel treating arbitrary text as molecules. **Ctrl+F** searches the
 text — Enter or F3 for the next match, Shift for
 the one before. The same window shows **Tail Log** and **Details**.
 
-The most interesting file — `.out`, then `.log`, `.fchk`, `.hess`, `.xyz` — is
-handed to the application's file openers, which is how ORCA Result Analyzer and
-the Gaussian analyzers pick it up. Untick **Open results in MoleditPy when they
-arrive** in Settings if you would rather do that yourself.
+When a job was submitted with **Open the results in MoleditPy when they arrive**
+ticked, the most interesting file — `.out`, then `.log`, `.fchk`, `.hess`,
+`.xyz` — is handed to the application's file openers when the automatic
+download at the job's end finishes, which is how ORCA Result Analyzer and the Gaussian analyzers pick it
+up. The box is in the submit wizard, below automatic download; it starts
+unticked for every submission and is kept with the job, so Resubmit and a saved
+preset carry it. It is not a global setting. A download you start yourself —
+**Download...**, or opening a file the File Browser has not fetched yet — is
+opened only by what you used, never a second time.
 
 Opening a result clears the editor first, so what you are looking at is the
 result and nothing else — the molecule you submitted does not stay on the 2D

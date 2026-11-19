@@ -15,6 +15,7 @@ at construction time.
 from __future__ import annotations
 
 from PySide6.QtCore import QEvent, QObject
+from PySide6.QtGui import QColor, QPalette
 
 # ---------------------------------------------------------------------------
 # State colours -- imported by jobs_dialog and status_widget
@@ -53,7 +54,13 @@ CY_ACCENT2 = "#1565c0"
 # accent that is the same in both modes, and only on interactive states
 # (hover, focus, selection) -- resting widgets use palette() and look natural.
 
-DIALOG_STYLESHEET = f"""
+_STYLESHEET_TEMPLATE = f"""
+/* --- secondary text: hints, counts, status lines ------------------------- */
+
+QLabel[muted="true"] {{
+    color: @MUTED@;
+}}
+
 /* --- push buttons --------------------------------------------------------- */
 
 QToolBar {{
@@ -65,7 +72,7 @@ QToolBar {{
 QPushButton, QToolButton[jobManagerAction="true"] {{
     background: palette(button);
     color: palette(button-text);
-    border: 1px solid palette(mid);
+    border: 1px solid @BORDER@;
     border-radius: 5px;
     padding: 5px 14px;
     min-height: 20px;
@@ -83,8 +90,9 @@ QPushButton:pressed, QToolButton[jobManagerAction="true"]:pressed {{
 }}
 
 QPushButton:disabled, QToolButton[jobManagerAction="true"]:disabled {{
-    color: palette(mid);
-    border-color: palette(mid);
+    color: @DISABLED@;
+    background: @BUTTON@;
+    border-color: @DISABLED@;
 }}
 
 QPushButton:checked, QToolButton[jobManagerAction="true"]:checked {{
@@ -97,7 +105,7 @@ QPushButton:checked, QToolButton[jobManagerAction="true"]:checked {{
 
 QTableView {{
     gridline-color: transparent;
-    border: 1px solid palette(mid);
+    border: 1px solid @BORDER@;
     border-radius: 6px;
     alternate-background-color: palette(alternate-base);
     selection-background-color: rgba(41, 121, 255, 0.28);
@@ -112,16 +120,16 @@ QTableView::item {{
 
 QHeaderView::section {{
     background: palette(button);
-    color: palette(mid);
+    color: @MUTED@;
     border: none;
-    border-bottom: 1px solid palette(mid);
+    border-bottom: 1px solid @BORDER@;
     padding: 4px 8px;
 }}
 
 /* --- tree ----------------------------------------------------------------- */
 
 QTreeWidget {{
-    border: 1px solid palette(mid);
+    border: 1px solid @BORDER@;
     border-radius: 6px;
     outline: none;
 }}
@@ -140,7 +148,7 @@ QTreeWidget::item:hover:!selected {{
 QPlainTextEdit, QTextEdit {{
     background: palette(base);
     color: palette(text);
-    border: 1px solid palette(mid);
+    border: 1px solid @BORDER@;
     border-radius: 6px;
     padding: 4px;
 }}
@@ -154,7 +162,7 @@ QPlainTextEdit:focus, QTextEdit:focus {{
 QLineEdit {{
     background: palette(base);
     color: palette(text);
-    border: 1px solid palette(mid);
+    border: 1px solid @BORDER@;
     border-radius: 4px;
     padding: 3px 6px;
     min-height: 20px;
@@ -165,8 +173,8 @@ QLineEdit:focus {{
 }}
 
 QLineEdit:disabled {{
-    color: palette(mid);
-    background: palette(window);
+    color: @DISABLED@;
+    background: @WINDOW@;
 }}
 
 /* --- spin box ------------------------------------------------------------- */
@@ -174,7 +182,7 @@ QLineEdit:disabled {{
 QSpinBox {{
     background: palette(base);
     color: palette(text);
-    border: 1px solid palette(mid);
+    border: 1px solid @BORDER@;
     border-radius: 4px;
     padding: 2px 20px 2px 4px;
     min-height: 22px;
@@ -197,8 +205,8 @@ QSpinBox::down-button {{
 }}
 
 QSpinBox:disabled {{
-    color: palette(mid);
-    background: palette(window);
+    color: @DISABLED@;
+    background: @WINDOW@;
 }}
 
 /* --- combo box ------------------------------------------------------------ */
@@ -206,7 +214,7 @@ QSpinBox:disabled {{
 QComboBox {{
     background: palette(base);
     color: palette(text);
-    border: 1px solid palette(mid);
+    border: 1px solid @BORDER@;
     border-radius: 4px;
     padding: 3px 6px;
     min-height: 20px;
@@ -217,8 +225,8 @@ QComboBox:focus {{
 }}
 
 QComboBox:disabled {{
-    color: palette(mid);
-    background: palette(window);
+    color: @DISABLED@;
+    background: @WINDOW@;
 }}
 
 QComboBox QAbstractItemView {{
@@ -230,7 +238,7 @@ QComboBox QAbstractItemView {{
 /* --- group box ------------------------------------------------------------ */
 
 QGroupBox {{
-    border: 1px solid palette(mid);
+    border: 1px solid @BORDER@;
     border-radius: 6px;
     margin-top: 10px;
     padding-top: 6px;
@@ -240,14 +248,14 @@ QGroupBox::title {{
     subcontrol-origin: margin;
     left: 10px;
     padding: 0 4px;
-    color: palette(mid);
+    color: @MUTED@;
 }}
 
 /* --- list widget ---------------------------------------------------------- */
 
 QListWidget {{
     background: palette(base);
-    border: 1px solid palette(mid);
+    border: 1px solid @BORDER@;
     border-radius: 6px;
     outline: none;
 }}
@@ -270,7 +278,7 @@ QScrollBar:vertical {{
 }}
 
 QScrollBar::handle:vertical {{
-    background: palette(mid);
+    background: @BORDER@;
     border-radius: 3px;
     min-height: 24px;
 }}
@@ -290,7 +298,7 @@ QScrollBar:horizontal {{
 }}
 
 QScrollBar::handle:horizontal {{
-    background: palette(mid);
+    background: @BORDER@;
     border-radius: 3px;
     min-width: 24px;
 }}
@@ -312,7 +320,7 @@ QDialogButtonBox QPushButton {{
 /* --- splitter ------------------------------------------------------------- */
 
 QSplitter::handle {{
-    background: palette(mid);
+    background: @BORDER@;
 }}
 
 QSplitter::handle:horizontal {{ width: 1px; }}
@@ -324,6 +332,81 @@ QScrollArea {{
     border: none;
 }}
 """
+
+#: Used when no palette is at hand. Mid-greys that read on light and dark surfaces.
+_FALLBACK_MUTED = "#767676"
+_FALLBACK_DISABLED = "#8c8c8c"
+
+
+def _blend(palette: QPalette, weight: float) -> str:
+    """Window text mixed toward the window colour; *weight* is the text's share."""
+    active = QPalette.ColorGroup.Active
+    text = palette.color(active, QPalette.ColorRole.WindowText)
+    back = palette.color(active, QPalette.ColorRole.Window)
+    mix = QColor(
+        round(text.red() * weight + back.red() * (1 - weight)),
+        round(text.green() * weight + back.green() * (1 - weight)),
+        round(text.blue() * weight + back.blue() * (1 - weight)),
+    )
+    return mix.name()
+
+
+def border_color(palette: QPalette) -> str:
+    """Frames, separators and scroll handles.
+
+    Not palette(mid): some Linux platform themes set it to white or nearly
+    so, and every button and field lost its outline.
+    """
+    return _blend(palette, 0.35)
+
+
+def disabled_text_color(palette: QPalette) -> str:
+    """Fainter than muted text so a disabled control still looks disabled."""
+    return _blend(palette, 0.4)
+
+
+def muted_text_color(palette: QPalette) -> str:
+    """Secondary text: the window text blended 60/40 toward the window colour.
+
+    ``palette(mid)`` was used for this, but it is a border shade, not a text
+    colour. Under Fusion -- the default style on Linux -- it is #b8b8b8 on a
+    white or #efefef surface, and hints, header labels and group titles all
+    but vanished. A blend keeps the same contrast direction in light and
+    dark palettes alike.
+    """
+    return _blend(palette, 0.6)
+
+
+def dialog_stylesheet(palette: QPalette = None) -> str:
+    """The shared stylesheet, with secondary text matched to *palette*."""
+    if palette is None:
+        tokens = {
+            "@MUTED@": _FALLBACK_MUTED,
+            "@DISABLED@": _FALLBACK_DISABLED,
+            "@BORDER@": "palette(mid)",
+            "@BUTTON@": "palette(button)",
+            "@WINDOW@": "palette(window)",
+        }
+    else:
+        # Disabled controls take every colour from the *active* group, as
+        # fixed hex. palette(...) inside a :disabled rule reads the disabled
+        # group, which some Linux platform themes fill with white -- disabled
+        # buttons came out as white text, border and all, on white.
+        active = QPalette.ColorGroup.Active
+        tokens = {
+            "@MUTED@": muted_text_color(palette),
+            "@DISABLED@": disabled_text_color(palette),
+            "@BORDER@": border_color(palette),
+            "@BUTTON@": palette.color(active, QPalette.ColorRole.Button).name(),
+            "@WINDOW@": palette.color(active, QPalette.ColorRole.Window).name(),
+        }
+    sheet = _STYLESHEET_TEMPLATE
+    for token, value in tokens.items():
+        sheet = sheet.replace(token, value)
+    return sheet
+
+
+DIALOG_STYLESHEET = dialog_stylesheet()
 
 
 __all__ = [
@@ -337,13 +420,26 @@ __all__ = [
     "CY_ACCENT2",
     "DIALOG_STYLESHEET",
     "apply_theme",
+    "border_color",
+    "dialog_stylesheet",
+    "disabled_text_color",
+    "mark_muted",
+    "muted_text_color",
 ]
+
+
+def _sheet_for(widget) -> str:
+    from PySide6.QtWidgets import QApplication
+
+    return dialog_stylesheet(QApplication.palette(widget))
 
 
 class ThemeWatcher(QObject):
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Type.PaletteChange:
-            obj.setStyleSheet(DIALOG_STYLESHEET)
+            sheet = _sheet_for(obj)
+            if obj.styleSheet() != sheet:
+                obj.setStyleSheet(sheet)
         return False
 
 
@@ -355,5 +451,13 @@ def apply_theme(widget) -> None:
     global _theme_watcher
     if _theme_watcher is None:
         _theme_watcher = ThemeWatcher()
-    widget.setStyleSheet(DIALOG_STYLESHEET)
+    widget.setStyleSheet(_sheet_for(widget))
     widget.installEventFilter(_theme_watcher)
+
+
+def mark_muted(label) -> None:
+    """Show *label* as secondary text, in the themed dialog's muted colour."""
+    label.setProperty("muted", True)
+    style = label.style()
+    style.unpolish(label)
+    style.polish(label)

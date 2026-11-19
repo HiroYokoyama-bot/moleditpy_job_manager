@@ -246,6 +246,23 @@ class TestRoundTrip(ServiceTestCase):
         self.assertEqual(len(ready), 1)
         self.assertTrue(all(os.path.exists(p) for p in job.downloaded_files))
 
+    def test_only_the_download_at_a_jobs_end_counts_as_automatic(self):
+        # A file the user downloads (File Browser's Open) is opened by what
+        # they used; the automatic signal as well loaded it a second time.
+        job = self.submit()
+        automatic = []
+        self.service.auto_results_ready.connect(lambda job_id, paths: automatic.append(job_id))
+        with patch("job_manager.service.fetch_results", return_value=[]):
+            self.service.download(job, names=["mol.out"])
+        self.assertEqual(automatic, [])
+
+        self.transport.clear_rules()
+        self.transport.when("squeue", stdout="")
+        self.transport.when(SENTINEL_NAME, stdout="@@MOLEDITPY@@\n0\n")
+        self.transport.when("ls -p", stdout="mol.out\n")
+        self.service.poller.tick(force=True)
+        self.assertEqual(automatic, [job.id])
+
     def test_no_auto_download_when_disabled(self):
         job = self.submit(preset=make_preset(auto_download=False))
         self.transport.clear_rules()

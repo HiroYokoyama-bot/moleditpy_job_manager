@@ -27,6 +27,7 @@ from .submission_config import (
     with_reason,
 )
 from .window_utils import shell_editor
+from .theme import mark_muted
 
 
 class SubmissionResources(QWidget):
@@ -74,7 +75,7 @@ class SubmissionResources(QWidget):
         self.lbl_scanned = QLabel("")
 
         self.lbl_scanned.setWordWrap(True)
-        self.lbl_scanned.setStyleSheet("color: palette(mid);")
+        mark_muted(self.lbl_scanned)
         self.lbl_scanned.setVisible(False)
         self.txt_modules = QPlainTextEdit()
         self.txt_modules.setPlaceholderText("orca/5.0.4\nopenmpi/4.1.1")
@@ -107,6 +108,13 @@ class SubmissionResources(QWidget):
         self.chk_auto_download = QCheckBox("Download results automatically when the job ends")
         self.chk_auto_download.setChecked(bool(self.store.get_pref("auto_download", True)))
         self.chk_auto_download.toggled.connect(self._on_auto_download_toggled)
+        # Not remembered between submissions: opening a result pulls MoleditPy
+        # to the front when the job ends, so it is asked for each time.
+        self.chk_open_result = QCheckBox("Open the results in MoleditPy when they arrive")
+        self.chk_open_result.setToolTip(
+            "For this job only, when its automatic download finishes. A file you "
+            "download or open yourself is opened only by what you used."
+        )
 
         self.chk_download_all = QCheckBox(DOWNLOAD_ALL_TEXT)
         self.chk_download_all.setToolTip(
@@ -164,7 +172,7 @@ class SubmissionResources(QWidget):
         self.chk_chain_any.toggled.connect(self._refresh_preview)
         self.lbl_chain = QLabel("")
         self.lbl_chain.setWordWrap(True)
-        self.lbl_chain.setStyleSheet("color: palette(mid);")
+        mark_muted(self.lbl_chain)
 
         self.chk_start_at = QCheckBox("Do not start before")
         self.chk_start_at.setToolTip(
@@ -230,6 +238,7 @@ class SubmissionResources(QWidget):
         command_layout.addWidget(self.cmb_template)
         form.addRow("Fetch patterns", self.txt_globs)
         form.addRow(self.chk_auto_download)
+        form.addRow(self.chk_open_result)
         form.addRow(self.chk_download_all)
         form.addRow(self.chk_beside_input)
         form.addRow("Default download dir", dl_root_row)

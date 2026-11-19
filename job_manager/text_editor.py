@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 
 from . import PLUGIN_VERSION
 from .text_dialog import TextDialog
+from .theme import mark_muted
 from .text_document import (
     ENCODINGS,
     NEWLINES,
@@ -178,10 +179,10 @@ class TextEditorDialog(TextDialog):
         self._stamp: Optional[Tuple[int, int]] = None
 
         self.lbl_format = QLabel()
-        self.lbl_format.setStyleSheet("color: palette(mid);")
+        mark_muted(self.lbl_format)
         self.bottom_row.insertWidget(0, self.lbl_format)
         self.lbl_position = QLabel()
-        self.lbl_position.setStyleSheet("color: palette(mid);")
+        mark_muted(self.lbl_position)
         self.bottom_row.insertWidget(1, self.lbl_position)
         self.bottom_row.insertSpacing(2, 12)
         self.view.cursorPositionChanged.connect(self._show_position)

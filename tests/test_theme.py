@@ -63,6 +63,120 @@ class TestThemeConstants(unittest.TestCase):
         # defined as a constant nobody uses.
         self.assertIn(theme.CY_ACCENT, theme.DIALOG_STYLESHEET)
 
+    def test_no_text_is_drawn_in_the_border_shade(self):
+        # palette(mid) is #b8b8b8 under Fusion, the Linux default: text in it
+        # all but vanished on a white surface.
+        sheet = theme.dialog_stylesheet()
+        self.assertNotIn("color: palette(mid)", sheet.replace("border-color", "border"))
+        self.assertNotIn("@MUTED@", sheet)
+        self.assertNotIn("@DISABLED@", sheet)
+
+    def test_muted_text_is_readable_in_fusion_light_and_dark(self):
+        from PySide6.QtGui import QColor, QPalette
+        from PySide6.QtWidgets import QStyleFactory
+
+        def luminance(color):
+            def channel(value):
+                value /= 255
+                return value / 12.92 if value <= 0.03928 else ((value + 0.055) / 1.055) ** 2.4
+
+            return (
+                0.2126 * channel(color.red())
+                + 0.7152 * channel(color.green())
+                + 0.0722 * channel(color.blue())
+            )
+
+        def contrast(a, b):
+            high, low = sorted((luminance(a), luminance(b)), reverse=True)
+            return (high + 0.05) / (low + 0.05)
+
+        light = QStyleFactory.create("Fusion").standardPalette()
+        dark = QPalette(light)
+        dark.setColor(QPalette.ColorRole.Window, QColor("#353535"))
+        dark.setColor(QPalette.ColorRole.Base, QColor("#2a2a2a"))
+        dark.setColor(QPalette.ColorRole.WindowText, QColor("#ffffff"))
+        for palette in (light, dark):
+            muted = QColor(theme.muted_text_color(palette))
+            for surface in (QPalette.ColorRole.Window, QPalette.ColorRole.Base):
+                self.assertGreaterEqual(contrast(muted, palette.color(surface)), 4.5)
+            # Still secondary: distinguishable from the ordinary text.
+            self.assertNotEqual(muted, palette.color(QPalette.ColorRole.WindowText))
+            # Disabled sits between muted text and the surface, still legible.
+            disabled = QColor(theme.disabled_text_color(palette))
+            window = palette.color(QPalette.ColorRole.Window)
+            self.assertLess(contrast(disabled, window), contrast(muted, window))
+            self.assertGreaterEqual(contrast(disabled, window), 2.5)
+
+    def test_disabled_controls_ignore_a_white_disabled_palette(self):
+        # Some Linux platform themes fill the disabled colour group with
+        # white; palette(...) in a :disabled rule then drew white on white.
+        import re
+
+        from PySide6.QtGui import QColor, QPalette
+        from PySide6.QtWidgets import QStyleFactory
+
+        palette = QStyleFactory.create("Fusion").standardPalette()
+        for role in (
+            QPalette.ColorRole.Mid,
+            QPalette.ColorRole.Window,
+            QPalette.ColorRole.Button,
+            QPalette.ColorRole.ButtonText,
+            QPalette.ColorRole.WindowText,
+        ):
+            palette.setColor(QPalette.ColorGroup.Disabled, role, QColor("#ffffff"))
+        sheet = theme.dialog_stylesheet(palette)
+        disabled_rules = re.findall(r":disabled[^{]*\{([^}]*)\}", sheet)
+        self.assertEqual(len(disabled_rules), 4)
+        for body in disabled_rules:
+            self.assertNotIn("palette(", body)
+            self.assertNotIn("#ffffff", body)
+
+    def test_borders_survive_a_white_mid_shade(self):
+        # A platform theme with a white Mid erased every button outline.
+        from PySide6.QtGui import QColor, QPalette
+        from PySide6.QtWidgets import QStyleFactory
+
+        palette = QStyleFactory.create("Fusion").standardPalette()
+        palette.setColor(QPalette.ColorRole.Mid, QColor("#ffffff"))
+        sheet = theme.dialog_stylesheet(palette)
+        self.assertNotIn("palette(mid)", sheet)
+        border = theme.border_color(palette)
+        self.assertIn(f"border: 1px solid {border}", sheet)
+        self.assertLess(QColor(border).lightness(), 200)
+
+    def test_a_system_palette_change_recolours_an_open_dialog(self):
+        # The colours are fixed hex computed from the palette, so a switch
+        # between light and dark must rebuild the sheet, not keep the old one.
+        from PySide6.QtCore import QEvent
+        from PySide6.QtGui import QColor, QPalette
+        from PySide6.QtWidgets import QApplication, QDialog, QStyleFactory
+
+        app = QApplication.instance()
+        original = app.palette()
+        self.addCleanup(app.setPalette, original)
+        light = QStyleFactory.create("Fusion").standardPalette()
+        app.setPalette(light)
+        dialog = QDialog()
+        self.addCleanup(dialog.deleteLater)
+        theme.apply_theme(dialog)
+        self.assertIn(theme.muted_text_color(light), dialog.styleSheet())
+
+        dark = QPalette(light)
+        dark.setColor(QPalette.ColorRole.Window, QColor("#202020"))
+        dark.setColor(QPalette.ColorRole.WindowText, QColor("#f0f0f0"))
+        app.setPalette(dark)
+        QApplication.sendEvent(dialog, QEvent(QEvent.Type.PaletteChange))
+        self.assertIn(theme.muted_text_color(dark), dialog.styleSheet())
+        self.assertNotIn(theme.muted_text_color(light), dialog.styleSheet())
+
+    def test_mark_muted_tags_the_label_for_the_stylesheet(self):
+        from PySide6.QtWidgets import QLabel
+
+        label = QLabel("hint")
+        theme.mark_muted(label)
+        self.assertTrue(label.property("muted"))
+        self.assertIn('QLabel[muted="true"]', theme.DIALOG_STYLESHEET)
+
     def test_all_expected_names_are_exported(self):
         expected = {
             "CY_GREEN",

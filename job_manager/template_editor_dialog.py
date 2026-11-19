@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import PLUGIN_VERSION
-from .theme import apply_theme
+from .theme import apply_theme, mark_muted
 from .window_utils import make_independent
 
 #: Shown wherever a command line is edited here, so the placeholders are
@@ -106,7 +106,7 @@ class TemplateEditorDialog(QDialog):
             "under a name of your own."
         )
         hint.setWordWrap(True)
-        hint.setStyleSheet("color: palette(mid);")
+        mark_muted(hint)
         layout.addWidget(hint)
 
         defaults_box = QGroupBox("Default command per extension")

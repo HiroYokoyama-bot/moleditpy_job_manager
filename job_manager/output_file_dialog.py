@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 from . import PLUGIN_VERSION
 from .file_tree import FULL_HEADERS, configure_tree, folder_factory, make_filter_row
 from .models import Job
-from .theme import apply_theme
+from .theme import apply_theme, mark_muted
 from .tree_utils import (
     IS_REMOTE_ROLE,
     PATH_ROLE,
@@ -150,14 +150,17 @@ class OutputFileSelectorDialog(QDialog):
 
         self.lbl_status = QLabel("")
         self.lbl_status.setTextFormat(Qt.TextFormat.PlainText)
-        self.lbl_status.setStyleSheet("color: palette(mid); font-size: 11px;")
+        self.lbl_status.setStyleSheet("font-size: 11px;")
+        mark_muted(self.lbl_status)
         layout.addWidget(self.lbl_status)
 
-        box = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Open | QDialogButtonBox.StandardButton.Close
-        )
-        self.btn_text = box.button(QDialogButtonBox.StandardButton.Open)
-        self.btn_text.setText("Open in Text Viewer")
+        box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        # A plain action button, not StandardButton.Open: Qt puts the accept
+        # role where each platform's convention wants it, which on GNOME,
+        # KDE and macOS is the right end, past the other actions. Action
+        # buttons keep the order they were added in everywhere.
+        self.btn_text = QPushButton("Open in Text Viewer")
+        box.addButton(self.btn_text, QDialogButtonBox.ButtonRole.ActionRole)
         self.btn_text.setToolTip("Read the selected non-binary file in the built-in text viewer.")
         self.btn_text.setEnabled(False)
         self.btn_text.clicked.connect(self._open_selected_as_text)

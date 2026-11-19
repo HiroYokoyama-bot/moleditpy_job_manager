@@ -107,7 +107,6 @@ DEFAULT_PREFS: Dict[str, Any] = {
     "download_beside_input": True,
     "auto_download": True,
     "download_all_outputs": True,
-    "open_result_after_download": True,
     #: Off by default: a badge changes how MoleditPy looks in the task bar;
     #: the status bar counter is always there and costs nothing.
     "taskbar_badge": False,

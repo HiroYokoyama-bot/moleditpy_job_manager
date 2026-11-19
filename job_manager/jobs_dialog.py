@@ -399,7 +399,7 @@ class JobsDialog(QDialog):
             (self.service.message, self._append_message),
             (self.service.error, self._append_error),
             (self.service.log_ready, self._show_log),
-            (self.service.results_ready, self._on_results_ready),
+            (self.service.auto_results_ready, self._on_results_ready),
         ]
         for signal, slot in self._connections:
             signal.connect(slot)
@@ -1660,7 +1660,10 @@ class JobsDialog(QDialog):
         dialog.show()
 
     def _on_results_ready(self, job_id: str, paths: list) -> None:
-        if not self.service.store.get_pref("open_result_after_download", True):
+        # Per job, ticked in the submit wizard. A job from before the choice
+        # existed has no entry and is not opened.
+        job = self.service.store.jobs.get(job_id)
+        if job is None or not (job.preset or {}).get("open_result"):
             return
         self.open_result_files(paths)
 

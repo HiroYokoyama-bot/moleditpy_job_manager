@@ -37,7 +37,7 @@ from PySide6.QtWidgets import (
 
 from .file_table import FilePathTable
 from .models import MAX_PRIORITY, MIN_PRIORITY, Job, hold_reasons
-from .theme import apply_theme
+from .theme import apply_theme, mark_muted
 from .window_utils import make_independent
 
 
@@ -169,7 +169,7 @@ class JobDetailsDialog(QDialog):
         layout.addWidget(tabs, 1)
 
         self.lbl_saved = QLabel("")
-        self.lbl_saved.setStyleSheet("color: palette(mid);")
+        mark_muted(self.lbl_saved)
         layout.addWidget(self.lbl_saved)
 
         buttons = QDialogButtonBox(

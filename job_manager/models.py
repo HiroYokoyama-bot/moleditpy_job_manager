@@ -554,6 +554,9 @@ class SubmitPreset:
         default_factory=lambda: ["*.out", "*.log", "*.xyz", "*.hess", "*.fchk"]
     )
     auto_download: bool = True
+    #: Open the downloaded results in MoleditPy. Chosen per job in the submit
+    #: wizard, and off unless ticked there.
+    open_result: bool = False
     extra_directives: List[str] = field(default_factory=list)
     #: Typed after the submit verb, before the script: ``qsub <this> run.sh``.
     #: For what a site wants on the command line rather than as a directive,

@@ -109,7 +109,7 @@ from .submission_config import (
 )
 from .submission_resources import SubmissionResources
 from .submission_templates import SubmissionTemplates
-from .theme import apply_theme
+from .theme import apply_theme, mark_muted
 from .window_utils import accept_drop_as_copy, make_independent, set_spin_value
 from .wheel_guard import install_wheel_guard
 
@@ -383,7 +383,7 @@ class SubmitDialog(QDialog):
         )
         self.lbl_remote = QLabel(REMOTE_HINT)
         self.lbl_remote.setWordWrap(True)
-        self.lbl_remote.setStyleSheet("color: palette(mid);")
+        mark_muted(self.lbl_remote)
 
         check_row = QWidget()
         check_layout = QHBoxLayout(check_row)
@@ -448,7 +448,7 @@ class SubmitDialog(QDialog):
 
         self.lbl_relay_status = QLabel("")
         self.lbl_relay_status.setWordWrap(True)
-        self.lbl_relay_status.setStyleSheet("color: palette(mid);")
+        mark_muted(self.lbl_relay_status)
         form.addRow(self.lbl_relay_status)
 
         box.toggled.connect(self._on_relay_toggled)
@@ -616,6 +616,7 @@ class SubmitDialog(QDialog):
         self.resources = SubmissionResources(self.store, callbacks, self)
         self.btn_browse_download_root = self.resources.btn_browse_download_root
         self.chk_auto_download = self.resources.chk_auto_download
+        self.chk_open_result = self.resources.chk_open_result
         self.chk_beside_input = self.resources.chk_beside_input
         self.chk_chain = self.resources.chk_chain
         self.chk_chain_any = self.resources.chk_chain_any
@@ -704,8 +705,8 @@ class SubmitDialog(QDialog):
         # A Job Server job may reserve no cores, for a script that only waits;
         # a queue system rejects a request for none.
         self.spin_cpus.setMinimum(0 if host is not None and host.is_job_server else 1)
-        if self.cmb_preset.count() > 1:
-            self.cmb_preset.setCurrentIndex(1)
+        # No preset is picked for the user: selecting the first one silently
+        # overwrote the form, including a resubmitted job's own settings.
         self._on_preset_changed()
         self._update_queue_fields()
         self._update_force_row()
@@ -994,6 +995,7 @@ class SubmitDialog(QDialog):
             self.chk_auto_download.setChecked(bool(self.store.get_pref("auto_download", True)))
         else:
             self.chk_auto_download.setChecked(bool(preset.auto_download))
+        self.chk_open_result.setChecked(bool(preset.open_result))
 
     def collect_preset(self) -> SubmitPreset:
         host = self.current_host()
@@ -1019,6 +1021,7 @@ class SubmitDialog(QDialog):
             submit_options=self.txt_submit_options.text().strip(),
             fetch_globs=globs,
             auto_download=bool(self.chk_auto_download.isChecked()),
+            open_result=bool(self.chk_open_result.isChecked()),
         )
         return preset
 
@@ -1782,8 +1785,8 @@ class SubmitDialog(QDialog):
     def _remember(self, host: HostProfile, preset: SubmitPreset) -> None:
         """Open the next submission on this host, not whichever sorts first.
 
-        Only the host. The form itself starts from the host's first preset (or
-        the defaults) every time -- restoring the previous submission's fields
+        Only the host. The form itself starts from the defaults every time,
+        with no preset chosen -- restoring the previous submission's fields
         was tried and taken out -- so the fields are not stored either.
         """
         self.store.set_pref("last_host_id", host.id)
