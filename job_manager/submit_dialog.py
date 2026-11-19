@@ -109,7 +109,7 @@ from .submission_config import (
 )
 from .submission_resources import SubmissionResources
 from .submission_templates import SubmissionTemplates
-from .theme import apply_theme
+from .theme import apply_theme, mark_muted
 from .window_utils import accept_drop_as_copy, make_independent, set_spin_value
 from .wheel_guard import install_wheel_guard
 
@@ -383,7 +383,7 @@ class SubmitDialog(QDialog):
         )
         self.lbl_remote = QLabel(REMOTE_HINT)
         self.lbl_remote.setWordWrap(True)
-        self.lbl_remote.setStyleSheet("color: palette(mid);")
+        mark_muted(self.lbl_remote)
 
         check_row = QWidget()
         check_layout = QHBoxLayout(check_row)
@@ -448,7 +448,7 @@ class SubmitDialog(QDialog):
 
         self.lbl_relay_status = QLabel("")
         self.lbl_relay_status.setWordWrap(True)
-        self.lbl_relay_status.setStyleSheet("color: palette(mid);")
+        mark_muted(self.lbl_relay_status)
         form.addRow(self.lbl_relay_status)
 
         box.toggled.connect(self._on_relay_toggled)
@@ -704,8 +704,8 @@ class SubmitDialog(QDialog):
         # A Job Server job may reserve no cores, for a script that only waits;
         # a queue system rejects a request for none.
         self.spin_cpus.setMinimum(0 if host is not None and host.is_job_server else 1)
-        if self.cmb_preset.count() > 1:
-            self.cmb_preset.setCurrentIndex(1)
+        # No preset is picked for the user: selecting the first one silently
+        # overwrote the form, including a resubmitted job's own settings.
         self._on_preset_changed()
         self._update_queue_fields()
         self._update_force_row()
@@ -1782,8 +1782,8 @@ class SubmitDialog(QDialog):
     def _remember(self, host: HostProfile, preset: SubmitPreset) -> None:
         """Open the next submission on this host, not whichever sorts first.
 
-        Only the host. The form itself starts from the host's first preset (or
-        the defaults) every time -- restoring the previous submission's fields
+        Only the host. The form itself starts from the defaults every time,
+        with no preset chosen -- restoring the previous submission's fields
         was tried and taken out -- so the fields are not stored either.
         """
         self.store.set_pref("last_host_id", host.id)

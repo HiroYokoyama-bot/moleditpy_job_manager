@@ -27,6 +27,7 @@ from .submission_config import (
     with_reason,
 )
 from .window_utils import shell_editor
+from .theme import mark_muted
 
 
 class SubmissionResources(QWidget):
@@ -74,7 +75,7 @@ class SubmissionResources(QWidget):
         self.lbl_scanned = QLabel("")
 
         self.lbl_scanned.setWordWrap(True)
-        self.lbl_scanned.setStyleSheet("color: palette(mid);")
+        mark_muted(self.lbl_scanned)
         self.lbl_scanned.setVisible(False)
         self.txt_modules = QPlainTextEdit()
         self.txt_modules.setPlaceholderText("orca/5.0.4\nopenmpi/4.1.1")
@@ -164,7 +165,7 @@ class SubmissionResources(QWidget):
         self.chk_chain_any.toggled.connect(self._refresh_preview)
         self.lbl_chain = QLabel("")
         self.lbl_chain.setWordWrap(True)
-        self.lbl_chain.setStyleSheet("color: palette(mid);")
+        mark_muted(self.lbl_chain)
 
         self.chk_start_at = QCheckBox("Do not start before")
         self.chk_start_at.setToolTip(

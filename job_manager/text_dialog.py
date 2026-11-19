@@ -43,7 +43,7 @@ from PySide6.QtWidgets import (
 )
 
 from .text_document import TextFormat, write_bytes
-from .theme import apply_theme
+from .theme import apply_theme, mark_muted
 from .window_utils import bring_to_front, make_independent
 
 
@@ -395,7 +395,7 @@ class TextDialog(QDialog):
         self.btn_next.clicked.connect(lambda: self.find(False))
         row.addWidget(self.btn_next)
         self.lbl_find = QLabel("")
-        self.lbl_find.setStyleSheet("color: palette(mid);")
+        mark_muted(self.lbl_find)
         self.lbl_find.setMinimumWidth(110)
         row.addWidget(self.lbl_find)
         self.btn_close_find = QToolButton()

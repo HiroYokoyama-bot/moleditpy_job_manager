@@ -36,7 +36,7 @@ from PySide6.QtWidgets import (
 
 from . import PLUGIN_VERSION
 from .file_tree import configure_tree, folder_factory, make_filter_row
-from .theme import apply_theme
+from .theme import apply_theme, mark_muted
 from .tree_utils import (
     PATH_ROLE,
     collect_tree_leaves,
@@ -114,7 +114,7 @@ class DownloadDialog(QDialog):
         buttons_row.addWidget(self.btn_untick)
         buttons_row.addStretch(1)
         self.lbl_count = QLabel("")
-        self.lbl_count.setStyleSheet("color: palette(mid);")
+        mark_muted(self.lbl_count)
         buttons_row.addWidget(self.lbl_count)
         layout.addLayout(buttons_row)
 

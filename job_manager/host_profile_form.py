@@ -29,6 +29,7 @@ from .models import (
 )
 from .schedulers import available_schedulers
 from .store import MAX_POLL_INTERVAL, MIN_POLL_INTERVAL
+from .theme import mark_muted
 from .window_utils import shell_editor
 
 EQUAL_PATH_TIP = (
@@ -326,7 +327,7 @@ class HostProfileForm(QWidget):
             "asking again."
         )
         self.lbl_key_tip.setWordWrap(True)
-        self.lbl_key_tip.setStyleSheet("color: palette(mid);")
+        mark_muted(self.lbl_key_tip)
         self.lbl_key_tip.setToolTip(KEY_TIP)
         right.addWidget(self.lbl_key_tip)
 

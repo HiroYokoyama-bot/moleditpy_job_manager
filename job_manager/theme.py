@@ -15,6 +15,7 @@ at construction time.
 from __future__ import annotations
 
 from PySide6.QtCore import QEvent, QObject
+from PySide6.QtGui import QColor, QPalette
 
 # ---------------------------------------------------------------------------
 # State colours -- imported by jobs_dialog and status_widget
@@ -53,7 +54,13 @@ CY_ACCENT2 = "#1565c0"
 # accent that is the same in both modes, and only on interactive states
 # (hover, focus, selection) -- resting widgets use palette() and look natural.
 
-DIALOG_STYLESHEET = f"""
+_STYLESHEET_TEMPLATE = f"""
+/* --- secondary text: hints, counts, status lines ------------------------- */
+
+QLabel[muted="true"] {{
+    color: @MUTED@;
+}}
+
 /* --- push buttons --------------------------------------------------------- */
 
 QToolBar {{
@@ -83,7 +90,7 @@ QPushButton:pressed, QToolButton[jobManagerAction="true"]:pressed {{
 }}
 
 QPushButton:disabled, QToolButton[jobManagerAction="true"]:disabled {{
-    color: palette(mid);
+    color: @DISABLED@;
     border-color: palette(mid);
 }}
 
@@ -112,7 +119,7 @@ QTableView::item {{
 
 QHeaderView::section {{
     background: palette(button);
-    color: palette(mid);
+    color: @MUTED@;
     border: none;
     border-bottom: 1px solid palette(mid);
     padding: 4px 8px;
@@ -165,7 +172,7 @@ QLineEdit:focus {{
 }}
 
 QLineEdit:disabled {{
-    color: palette(mid);
+    color: @DISABLED@;
     background: palette(window);
 }}
 
@@ -197,7 +204,7 @@ QSpinBox::down-button {{
 }}
 
 QSpinBox:disabled {{
-    color: palette(mid);
+    color: @DISABLED@;
     background: palette(window);
 }}
 
@@ -217,7 +224,7 @@ QComboBox:focus {{
 }}
 
 QComboBox:disabled {{
-    color: palette(mid);
+    color: @DISABLED@;
     background: palette(window);
 }}
 
@@ -240,7 +247,7 @@ QGroupBox::title {{
     subcontrol-origin: margin;
     left: 10px;
     padding: 0 4px;
-    color: palette(mid);
+    color: @MUTED@;
 }}
 
 /* --- list widget ---------------------------------------------------------- */
@@ -325,6 +332,51 @@ QScrollArea {{
 }}
 """
 
+#: Used when no palette is at hand. Mid-greys that read on light and dark surfaces.
+_FALLBACK_MUTED = "#767676"
+_FALLBACK_DISABLED = "#8c8c8c"
+
+
+def _blend(palette: QPalette, weight: float) -> str:
+    """Window text mixed toward the window colour; *weight* is the text's share."""
+    text = palette.color(QPalette.ColorRole.WindowText)
+    back = palette.color(QPalette.ColorRole.Window)
+    mix = QColor(
+        round(text.red() * weight + back.red() * (1 - weight)),
+        round(text.green() * weight + back.green() * (1 - weight)),
+        round(text.blue() * weight + back.blue() * (1 - weight)),
+    )
+    return mix.name()
+
+
+def disabled_text_color(palette: QPalette) -> str:
+    """Fainter than muted text so a disabled control still looks disabled."""
+    return _blend(palette, 0.4)
+
+
+def muted_text_color(palette: QPalette) -> str:
+    """Secondary text: the window text blended 60/40 toward the window colour.
+
+    ``palette(mid)`` was used for this, but it is a border shade, not a text
+    colour. Under Fusion -- the default style on Linux -- it is #b8b8b8 on a
+    white or #efefef surface, and hints, header labels and group titles all
+    but vanished. A blend keeps the same contrast direction in light and
+    dark palettes alike.
+    """
+    return _blend(palette, 0.6)
+
+
+def dialog_stylesheet(palette: QPalette = None) -> str:
+    """The shared stylesheet, with secondary text matched to *palette*."""
+    if palette is None:
+        muted, disabled = _FALLBACK_MUTED, _FALLBACK_DISABLED
+    else:
+        muted, disabled = muted_text_color(palette), disabled_text_color(palette)
+    return _STYLESHEET_TEMPLATE.replace("@MUTED@", muted).replace("@DISABLED@", disabled)
+
+
+DIALOG_STYLESHEET = dialog_stylesheet()
+
 
 __all__ = [
     "CY_GREEN",
@@ -337,13 +389,25 @@ __all__ = [
     "CY_ACCENT2",
     "DIALOG_STYLESHEET",
     "apply_theme",
+    "dialog_stylesheet",
+    "disabled_text_color",
+    "mark_muted",
+    "muted_text_color",
 ]
+
+
+def _sheet_for(widget) -> str:
+    from PySide6.QtWidgets import QApplication
+
+    return dialog_stylesheet(QApplication.palette(widget))
 
 
 class ThemeWatcher(QObject):
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Type.PaletteChange:
-            obj.setStyleSheet(DIALOG_STYLESHEET)
+            sheet = _sheet_for(obj)
+            if obj.styleSheet() != sheet:
+                obj.setStyleSheet(sheet)
         return False
 
 
@@ -355,5 +419,13 @@ def apply_theme(widget) -> None:
     global _theme_watcher
     if _theme_watcher is None:
         _theme_watcher = ThemeWatcher()
-    widget.setStyleSheet(DIALOG_STYLESHEET)
+    widget.setStyleSheet(_sheet_for(widget))
     widget.installEventFilter(_theme_watcher)
+
+
+def mark_muted(label) -> None:
+    """Show *label* as secondary text, in the themed dialog's muted colour."""
+    label.setProperty("muted", True)
+    style = label.style()
+    style.unpolish(label)
+    style.polish(label)

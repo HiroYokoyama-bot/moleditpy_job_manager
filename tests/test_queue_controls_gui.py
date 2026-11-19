@@ -484,15 +484,18 @@ class TestTheWizardRemembersTheLastSubmission(DialogTestCase):
 
         self.assertEqual(again.spin_cpus.value(), 1)
 
-    def test_a_named_preset_wins_over_the_remembered_one(self):
-        # Choosing a preset is a decision; last time's settings must not
-        # quietly overwrite it.
+    def test_a_saved_preset_waits_to_be_chosen(self):
+        # Choosing a preset is a decision; the wizard must not make it by
+        # opening on the first one.
         self.submit_once()
         preset = make_preset(host_id=self.host.id, name="mine", walltime="01:00:00")
         self.store.add_preset(preset)
 
         again = self.dialog()
 
+        self.assertEqual(again.cmb_preset.currentData(), "")
+        self.assertEqual(again.txt_walltime.text(), "")
+        again.cmb_preset.setCurrentIndex(again.cmb_preset.findData(preset.id))
         self.assertEqual(again.txt_walltime.text(), "01:00:00")
 
     def test_nothing_is_remembered_for_a_different_host(self):

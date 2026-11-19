@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 from . import PLUGIN_VERSION
 from .file_tree import FULL_HEADERS, configure_tree, folder_factory, make_filter_row
 from .models import Job
-from .theme import apply_theme
+from .theme import apply_theme, mark_muted
 from .tree_utils import (
     IS_REMOTE_ROLE,
     PATH_ROLE,
@@ -150,7 +150,8 @@ class OutputFileSelectorDialog(QDialog):
 
         self.lbl_status = QLabel("")
         self.lbl_status.setTextFormat(Qt.TextFormat.PlainText)
-        self.lbl_status.setStyleSheet("color: palette(mid); font-size: 11px;")
+        self.lbl_status.setStyleSheet("font-size: 11px;")
+        mark_muted(self.lbl_status)
         layout.addWidget(self.lbl_status)
 
         box = QDialogButtonBox(

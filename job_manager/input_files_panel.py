@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from .file_table import FilePathTable
+from .theme import mark_muted
 
 
 class InputFilesPanel(QGroupBox):
@@ -34,7 +35,7 @@ class InputFilesPanel(QGroupBox):
             "Optional. The first one is {input}; use {1}, {2}, ... for the numbered rows."
         )
         files_note.setWordWrap(True)
-        files_note.setStyleSheet("color: palette(mid);")
+        mark_muted(files_note)
         files_note.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         files_layout.addWidget(files_note)
         self.file_table = FilePathTable(self)

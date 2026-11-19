@@ -855,6 +855,7 @@ class TestSubmitDialog(DialogTestCase):
     def test_deleting_a_preset_asks_then_removes_it(self):
         preset = self.store.add_preset(make_preset(queue="gpu"))
         self.dialog._reload_hosts()
+        self.dialog.cmb_preset.setCurrentIndex(self.dialog.cmb_preset.findData(preset.id))
         self.assertTrue(self.dialog.btn_delete_preset.isEnabled())
         with patch(
             "job_manager.submit_dialog.QMessageBox.question",
@@ -879,11 +880,26 @@ class TestSubmitDialog(DialogTestCase):
         self.dialog.cmb_preset.setCurrentIndex(0)
         self.assertFalse(self.dialog.btn_delete_preset.isEnabled())
 
-    def test_reloading_a_preset_repopulates_the_form(self):
-        self.store.add_preset(make_preset(queue="gpu", memory="64G"))
+    def test_choosing_a_preset_repopulates_the_form(self):
+        preset = self.store.add_preset(make_preset(queue="gpu", memory="64G"))
         self.dialog._reload_hosts()
+        self.dialog.cmb_preset.setCurrentIndex(self.dialog.cmb_preset.findData(preset.id))
         self.assertEqual(self.dialog.txt_queue.text(), "gpu")
         self.assertEqual(self.dialog.txt_memory.text(), "64G")
+
+    def test_no_preset_is_chosen_by_default(self):
+        self.store.add_preset(make_preset(queue="gpu"))
+        self.dialog._reload_hosts()
+        self.assertEqual(self.dialog.cmb_preset.currentData(), "")
+        self.assertNotEqual(self.dialog.txt_queue.text(), "gpu")
+        self.assertFalse(self.dialog.btn_delete_preset.isEnabled())
+
+    def test_a_resubmitted_job_keeps_its_own_settings(self):
+        # The first saved preset used to be applied after the prefill and
+        # replaced the job's queue with its own.
+        self.store.add_preset(make_preset(queue="gpu"))
+        self.dialog.prefill(host_id=self.host.id, preset=make_preset(queue="long").to_dict())
+        self.assertEqual(self.dialog.txt_queue.text(), "long")
 
     def test_submit_with_no_input_at_all_asks_first(self):
         # Legal -- a command need not have an input file -- but nearly always
