@@ -258,7 +258,10 @@ class JobService(QObject):
             self.job_finished.emit(job.id, state)
         if finished and state != STATE_DONE:
             self._warn_stranded(job)
-        if state in (STATE_DONE, STATE_FAILED) and job.auto_download and not job.downloaded:
+        self._auto_download_if_due(job)
+
+    def _auto_download_if_due(self, job: Job) -> None:
+        if job.state in (STATE_DONE, STATE_FAILED) and job.auto_download and not job.downloaded:
             self.download(job, automatic=True)
 
     def _warn_stranded(self, job: Job) -> None:
@@ -339,6 +342,10 @@ class JobService(QObject):
         self._downloads_in_flight.add(job.id)
         source_path = self.store.jobs_path
         previous_state = job.state
+        # A download taken while the job runs is a snapshot. Counting it as
+        # the job's results made the download at its end skip, and the
+        # half-written outputs stayed as if they were final.
+        started_active = job.is_active
         local_dir = into or job.local_dir or self._local_dir_for(job.name, job.input_files)
         job.local_dir = local_dir
         if not job.is_active:
@@ -380,7 +387,7 @@ class JobService(QObject):
                     [p for p in job.downloaded_files or [] if os.path.isfile(p)] + list(paths or [])
                 )
             )
-            job.downloaded = bool(job.downloaded_files)
+            job.downloaded = job.downloaded or (bool(job.downloaded_files) and not started_active)
             job.touch(previous_state if job.state == STATE_DOWNLOADING else None)
             self.store.save_jobs()
             self.job_updated.emit(job.id)
@@ -389,6 +396,10 @@ class JobService(QObject):
             self.results_ready.emit(job.id, list(paths or []))
             if automatic:
                 self.auto_results_ready.emit(job.id, list(paths or []))
+            if started_active:
+                # The job may have ended while this ran, when its own
+                # download was refused as already in progress.
+                self._auto_download_if_due(job)
 
         def failed(message: str) -> None:
             self._downloads_in_flight.discard(job.id)
@@ -402,6 +413,8 @@ class JobService(QObject):
             self.poller.start()
             self.download_failed.emit(job.id, message)
             self.error.emit(f"Download failed: {message}")
+            if started_active:
+                self._auto_download_if_due(job)
 
         run_async(self.pool, work, on_success=done, on_error=failed)
         return True
