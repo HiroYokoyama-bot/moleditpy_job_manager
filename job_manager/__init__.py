@@ -446,7 +446,7 @@ def handle_dropped_file(path: str) -> bool:
     return True
 
 
-def _retire_previous_load(context) -> None:
+def _retire_previous_load(context) -> bool:
     """Shut down everything a previous load of this plugin left running.
 
     The host reloads a plugin by re-executing the package as new module objects
@@ -460,7 +460,11 @@ def _retire_previous_load(context) -> None:
 
     A load from before 2.0 registered only its ``stop_api``; that function's
     globals are its module's, so its ``shutdown`` is found through them.
+
+    True when the previous load had the Job Manager opened, or had taken it
+    over from a tray process: see :func:`_previous_load_opened`.
     """
+    opened = False
     previous = context.get_window(LOAD_TEARDOWN_KEY)
     if not callable(previous):
         stop_previous_api = context.get_window(API_TEARDOWN_KEY)
@@ -481,6 +485,7 @@ def _retire_previous_load(context) -> None:
                     context.register_window(key, None)
             except Exception:
                 logging.debug("Job Manager: the previous load's %s stayed", key, exc_info=True)
+        opened = _previous_load_opened(previous)
         try:
             previous()
         except Exception:
@@ -488,12 +493,32 @@ def _retire_previous_load(context) -> None:
     # Both: a downgrade to a load that only knows the API key still finds it.
     context.register_window(API_TEARDOWN_KEY, stop_api)
     context.register_window(LOAD_TEARDOWN_KEY, shutdown)
+    return opened
+
+
+def _previous_load_opened(previous: Any) -> bool:
+    """Whether the load ``previous`` shuts down counted as opened.
+
+    A reload -- updating the plugin from the Plugin Installer, say -- builds a
+    new tray controller that starts out unopened. A session that took the Job
+    Manager over from a tray process then found nothing left to take over, and
+    closing MoleditPy ended the Job Manager instead of handing it back.
+    """
+    try:
+        module_globals = getattr(previous, "__globals__", None) or {}
+        old_presence = (module_globals.get("_runtime_modules") or {}).get("presence")
+        current = old_presence.current() if old_presence is not None else None
+        tray = getattr(current, "tray", None)
+        return bool(getattr(tray, "opened", False))
+    except Exception:
+        logging.debug("Job Manager: the previous load's state was not read", exc_info=True)
+        return False
 
 
 def initialize(context) -> None:
     """Entry point called by the host at plugin load."""
     global _context
-    _retire_previous_load(context)
+    opened_before = _retire_previous_load(context)
     _context = context
     # Extensions rather than the Plugin menu. The host has no Extensions menu
     # of its own and creates it on demand, so this is a top-level entry.
@@ -540,7 +565,7 @@ def initialize(context) -> None:
     took_over = _take_tracking_back()
     store = _startup_store()
     _resume_tracking(store)
-    if took_over:
+    if took_over or opened_before:
         _keep_what_was_taken_over(store)
     # After tracking, so an API that is on adopts the service that resume
     # already built rather than making a second one.
