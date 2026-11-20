@@ -387,6 +387,39 @@ class TestHostStyleReload(ApiEntryTestCase):
         stopped.assert_called_once()
         self.assertIsNone(first._service)
 
+    def _tray_of(self, module):
+        presence = module._runtime_modules.get("presence")
+        current = presence.current() if presence is not None else None
+        return getattr(current, "tray", None)
+
+    def test_a_reload_keeps_a_taken_over_job_manager_counted_as_opened(self):
+        # Updating the plugin reloads it after this session took the Job
+        # Manager over from a tray process. The new load finds no tray process
+        # left, and used to start unopened: closing MoleditPy then ended the
+        # Job Manager instead of handing it back.
+        context = self.make_context()
+        first = self.load_copy("jm_reload_taken_a")
+        with patch.object(first, "_take_tracking_back", return_value=True):
+            first.initialize(context)
+        self.assertTrue(self._tray_of(first).opened)
+
+        second = self.load_copy("jm_reload_taken_b")
+        with patch.object(second, "_take_tracking_back", return_value=False):
+            second.initialize(context)
+        self.assertIsNotNone(second.get_service(create=False))
+        self.assertTrue(self._tray_of(second).opened)
+
+    def test_a_reload_of_an_unopened_load_stays_unopened(self):
+        context = self.make_context()
+        first = self.load_copy("jm_reload_unopened_a")
+        with patch.object(first, "_take_tracking_back", return_value=False):
+            first.initialize(context)
+
+        second = self.load_copy("jm_reload_unopened_b")
+        with patch.object(second, "_take_tracking_back", return_value=False):
+            second.initialize(context)
+        self.assertIsNone(second.get_service(create=False))
+
     def test_initialising_the_same_module_twice_is_not_a_reload(self):
         context = self.make_context()
         job_manager.initialize(context)
