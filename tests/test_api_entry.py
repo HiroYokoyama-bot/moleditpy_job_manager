@@ -162,7 +162,10 @@ class TestAnotherInstanceAlreadyServes(ApiEntryTestCase):
         listener = socket.socket()
         self.addCleanup(listener.close)
         listener.bind(("127.0.0.1", 0))
-        listener.listen(1)
+        # Nothing accepts, so every liveness probe stays in the backlog. Windows
+        # refuses a connection once the backlog is full, which would read as
+        # the other instance having gone.
+        listener.listen(16)
         port = listener.getsockname()[1]
         with open(os.path.join(self.tmp, "api.json"), "w", encoding="utf-8") as handle:
             json.dump({"port": port, "pid": os.getpid() + 1, "token": "theirs"}, handle)
