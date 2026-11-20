@@ -189,6 +189,7 @@ class TestSubmit(ServiceTestCase):
 class TestRoundTrip(ServiceTestCase):
     def test_individual_downloads_preserve_previous_files_and_emit_only_new_paths(self):
         job = self.submit()
+        job.touch(STATE_DONE)
         first = os.path.join(self.tmp, "first.out")
         second = os.path.join(self.tmp, "second.out")
         for path in (first, second):
@@ -261,6 +262,73 @@ class TestRoundTrip(ServiceTestCase):
         self.transport.when(SENTINEL_NAME, stdout="@@MOLEDITPY@@\n0\n")
         self.transport.when("ls -p", stdout="mol.out\n")
         self.service.poller.tick(force=True)
+        self.assertEqual(automatic, [job.id])
+
+    def finish(self, listing="mol.out\n"):
+        self.transport.clear_rules()
+        self.transport.when("squeue", stdout="")
+        self.transport.when(SENTINEL_NAME, stdout="@@MOLEDITPY@@\n0\n")
+        self.transport.when("ls -p", stdout=listing)
+        self.service.poller.tick(force=True)
+
+    def test_a_download_while_running_does_not_stand_in_for_the_one_at_the_end(self):
+        job = self.submit()
+        job.touch(STATE_RUNNING)
+        snapshot = os.path.join(self.tmp, "mol.out")
+        with open(snapshot, "w", encoding="utf-8") as handle:
+            handle.write("half written\n")
+        with patch("job_manager.service.fetch_results", return_value=[snapshot]):
+            self.service.download(job)
+        self.assertEqual(job.downloaded_files, [snapshot])
+        self.assertFalse(job.downloaded)
+
+        automatic = []
+        self.service.auto_results_ready.connect(lambda job_id, paths: automatic.append(job_id))
+        self.finish()
+        self.assertEqual(job.state, STATE_DONE)
+        self.assertEqual(automatic, [job.id])
+        self.assertTrue(job.downloaded)
+
+    def test_a_job_ending_during_a_running_download_is_downloaded_after_it(self):
+        job = self.submit()
+        job.touch(STATE_RUNNING)
+        automatic = []
+        self.service.auto_results_ready.connect(lambda job_id, paths: automatic.append(job_id))
+        snapshot = os.path.join(self.tmp, "mol.out")
+        with open(snapshot, "w", encoding="utf-8") as handle:
+            handle.write("half written\n")
+
+        def transfer(*args, **kwargs):
+            # The job's own download is refused here: this one is in flight.
+            self.finish()
+            self.assertEqual(automatic, [])
+            return [snapshot]
+
+        with patch("job_manager.service.fetch_results", side_effect=transfer):
+            self.service.download(job)
+        self.assertEqual(job.state, STATE_DONE)
+        self.assertEqual(automatic, [job.id])
+        self.assertTrue(job.downloaded)
+
+    def test_a_failed_download_while_running_does_not_lose_the_one_at_the_end(self):
+        job = self.submit()
+        job.touch(STATE_RUNNING)
+        automatic = []
+        self.service.auto_results_ready.connect(lambda job_id, paths: automatic.append(job_id))
+
+        calls = []
+
+        def transfer(*args, **kwargs):
+            calls.append(job.state)
+            if len(calls) > 1:
+                return []
+            self.finish()
+            raise OSError("connection reset")
+
+        with patch("job_manager.service.fetch_results", side_effect=transfer):
+            self.service.download(job)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(job.state, STATE_DONE)
         self.assertEqual(automatic, [job.id])
 
     def test_no_auto_download_when_disabled(self):
