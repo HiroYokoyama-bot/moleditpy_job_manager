@@ -54,6 +54,10 @@ _status_widget: Optional[Any] = None
 _beacon: Optional[Any] = None
 _api_server: Optional[Any] = None
 _api_external = 0
+#: Polls the instance this one deferred the API to; see `_watch_external_api`.
+_api_watch: Optional[Any] = None
+#: How often a deferring instance checks that the serving one is still there.
+API_WATCH_INTERVAL_MS = 5000
 _runtime_modules: dict[str, Any] = {}
 
 
@@ -131,6 +135,7 @@ def start_api(port: int = 0) -> int:
             "Job Manager: the local API is already served by another instance on port %s",
             _api_external,
         )
+        _watch_external_api()
         return _api_external
     _api_external = 0
     try:
@@ -146,11 +151,58 @@ def stop_api() -> None:
     """Stop listening, and take the endpoint file with it."""
     global _api_external
     _api_external = 0
+    _stop_api_watch()
     if _api_server is not None:
         try:
             _api_server.stop()
         except Exception:
             logging.debug("Job Manager: the local API did not stop cleanly", exc_info=True)
+
+
+def _watch_external_api() -> None:
+    """Take the API over if the instance this one deferred to stops serving it.
+
+    Without this, closing the MoleditPy that serves the API (its `stop` removes
+    the endpoint file) leaves a second, still-running MoleditPy with the API
+    switched on in its preferences but nothing listening.
+    """
+    global _api_watch
+    if _api_watch is None:
+        from PySide6.QtCore import QTimer
+
+        _api_watch = QTimer()
+        _api_watch.setInterval(API_WATCH_INTERVAL_MS)
+        _api_watch.timeout.connect(_check_external_api)
+    _api_watch.start()
+
+
+def _stop_api_watch() -> None:
+    if _api_watch is not None:
+        _api_watch.stop()
+
+
+def _check_external_api() -> None:
+    """One poll of `_watch_external_api`: start our own server once the other has gone."""
+    try:
+        if (
+            _service is None
+            or api_is_running()
+            or not _service.store.get_pref("api_enabled", False)
+        ):
+            _stop_api_watch()
+            return
+        from .api_core import live_endpoint
+
+        if live_endpoint(_service.store.directory) is not None:
+            return
+        _stop_api_watch()
+        logging.info("Job Manager: the instance serving the local API has gone; taking over")
+        # Defers, and watches again, if yet another instance got there first.
+        start_api()
+    except Exception:
+        logging.exception("Job Manager: taking over the local API failed")
+        if _context is not None:
+            _context.show_status_message("Job Manager API: could not take over the local API", 5000)
 
 
 def api_external_port() -> int:

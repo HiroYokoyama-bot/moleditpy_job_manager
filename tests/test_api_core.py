@@ -564,6 +564,29 @@ class TestTheToken(unittest.TestCase):
             json.dump({"port": 99999, "pid": 1}, handle)
         self.assertIsNone(api_core.live_endpoint(self.directory))
 
+    def test_removing_leaves_an_endpoint_file_another_process_published(self):
+        # The instance that took the API over must not lose its file to a late
+        # stop of the one it replaced.
+        self._publish_as_other_process(5000)
+        api_core.remove_endpoint_file(self.directory, 5000)
+        self.assertTrue(os.path.exists(api_core.endpoint_path(self.directory)))
+
+    def test_removing_leaves_this_process_file_for_another_port(self):
+        api_core.write_endpoint_file(self.directory, 5001, "t")
+        api_core.remove_endpoint_file(self.directory, 5000)
+        self.assertTrue(os.path.exists(api_core.endpoint_path(self.directory)))
+
+    def test_removing_takes_this_process_own_file(self):
+        api_core.write_endpoint_file(self.directory, 5000, "t")
+        api_core.remove_endpoint_file(self.directory, 5000)
+        self.assertFalse(os.path.exists(api_core.endpoint_path(self.directory)))
+
+    def test_removing_takes_an_unreadable_endpoint_file(self):
+        with open(api_core.endpoint_path(self.directory), "w", encoding="utf-8") as handle:
+            handle.write("{ not json")
+        api_core.remove_endpoint_file(self.directory)
+        self.assertFalse(os.path.exists(api_core.endpoint_path(self.directory)))
+
     def test_removing_the_endpoint_file_twice_is_not_an_error(self):
         api_core.write_endpoint_file(self.directory, 1, "t")
         api_core.remove_endpoint_file(self.directory)

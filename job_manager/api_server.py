@@ -374,7 +374,7 @@ class JobApiServer(QObject):
 
     def stop(self) -> None:
         self._bridge.close()
-        server, thread = self._server, self._thread
+        server, thread, port = self._server, self._thread, self._port
         self._server = self._thread = None
         self._port = 0
         if server is None:
@@ -386,7 +386,7 @@ class JobApiServer(QObject):
             logging.debug("Job Manager: the API socket did not close cleanly", exc_info=True)
         if thread is not None:
             thread.join(timeout=5)
-        remove_endpoint_file(self.service.store.directory)
+        remove_endpoint_file(self.service.store.directory, port)
         logging.info("Job Manager: local API stopped")
         self.stopped.emit()
 
