@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import secrets
 import socket
@@ -126,11 +127,35 @@ def live_endpoint(directory: str, timeout: float = 0.5) -> Optional[Dict[str, An
         return None
 
 
-def remove_endpoint_file(directory: str) -> None:
+def remove_endpoint_file(directory: str, port: int = 0) -> None:
+    """Remove the endpoint file, unless another instance has published its own since.
+
+    Instances share one state directory. When this one stops after another took
+    the API over (or raced it at start), the file names that other server, and
+    deleting it would leave a running server no client can find. ``port``, when
+    given, has to match as well as the pid.
+    """
+    path = endpoint_path(directory)
     try:
-        os.unlink(endpoint_path(directory))
-    except OSError:
-        pass
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except FileNotFoundError:
+        return
+    except (OSError, ValueError) as exc:
+        # Unreadable or half-written: nobody can discover a server through it.
+        logging.debug("Job Manager: removing an unreadable endpoint file: %s", exc)
+        data = None
+    if isinstance(data, dict):
+        try:
+            owner, owner_port = int(data.get("pid", 0)), int(data.get("port", 0))
+        except (TypeError, ValueError):
+            owner, owner_port = os.getpid(), 0
+        if owner != os.getpid() or (port and owner_port != int(port)):
+            return
+    try:
+        os.unlink(path)
+    except OSError as exc:
+        logging.debug("Job Manager: the endpoint file could not be removed: %s", exc)
 
 
 def tokens_match(presented: str, expected: str) -> bool:

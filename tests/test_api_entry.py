@@ -49,6 +49,7 @@ class ApiEntryTestCase(unittest.TestCase):
         job_manager._service = None
         job_manager._status_widget = None
         job_manager._api_server = None
+        job_manager._api_watch = None
 
     def enable_api(self):
         store = JobStore(self.tmp)
@@ -155,6 +156,55 @@ class TestAnotherInstanceAlreadyServes(ApiEntryTestCase):
         job_manager.stop_api()
         self.assertTrue(os.path.exists(os.path.join(self.tmp, "api.json")))
         self.assertEqual(job_manager.api_external_port(), 0)
+
+    def defer_at_load(self):
+        self.enable_api()
+        listener = socket.socket()
+        self.addCleanup(listener.close)
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        port = listener.getsockname()[1]
+        with open(os.path.join(self.tmp, "api.json"), "w", encoding="utf-8") as handle:
+            json.dump({"port": port, "pid": os.getpid() + 1, "token": "theirs"}, handle)
+        job_manager.initialize(self.context)
+        self.assertEqual(job_manager.api_external_port(), port)
+        return listener
+
+    def test_it_takes_over_when_the_other_instance_stops_serving(self):
+        # Closing the MoleditPy that served the API removed api.json and left a
+        # second one with the API switched on but nothing listening.
+        listener = self.defer_at_load()
+        self.assertTrue(job_manager._api_watch.isActive())
+        listener.close()
+        os.remove(os.path.join(self.tmp, "api.json"))
+        job_manager._check_external_api()
+        self.assertTrue(job_manager.api_is_running())
+        self.assertEqual(job_manager.api_external_port(), 0)
+        self.assertFalse(job_manager._api_watch.isActive())
+        with open(os.path.join(self.tmp, "api.json"), encoding="utf-8") as handle:
+            data = json.load(handle)
+        self.assertEqual(data["pid"], os.getpid())
+        self.assertEqual(data["port"], job_manager.get_api_server().port)
+
+    def test_it_keeps_deferring_while_the_other_instance_still_serves(self):
+        self.defer_at_load()
+        job_manager._check_external_api()
+        self.assertFalse(job_manager.api_is_running())
+        self.assertTrue(job_manager._api_watch.isActive())
+
+    def test_it_does_not_take_over_once_the_api_is_switched_off(self):
+        listener = self.defer_at_load()
+        job_manager.get_service().store.set_pref("api_enabled", False)
+        listener.close()
+        os.remove(os.path.join(self.tmp, "api.json"))
+        job_manager._check_external_api()
+        self.assertFalse(job_manager.api_is_running())
+        self.assertFalse(job_manager._api_watch.isActive())
+
+    def test_stopping_the_api_stops_watching_the_other_instance(self):
+        self.defer_at_load()
+        job_manager.stop_api()
+        self.assertFalse(job_manager._api_watch.isActive())
 
     def test_a_stale_endpoint_file_does_not_stop_a_fresh_start(self):
         job_manager.initialize(self.context)
