@@ -19,6 +19,10 @@ From a shell:
         --command "/opt/orca/orca {input} > {stem}.out" h2o.inp
     python -m job_manager.api_client wait <job id> --download
 
+Installed, the same command line is ``moleditpy-job`` (pip) and
+``moleditpy -r job_manager COMMAND`` (the plugin, MoleditPy 5.3+), whose
+``__main__`` hands a command here before Qt is loaded.
+
 See docs/API.md for every field and every route.
 """
 

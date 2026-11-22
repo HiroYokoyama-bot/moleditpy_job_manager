@@ -238,6 +238,8 @@ moleditpy-job-manager --host-monitor
 From the plugin folder or the release zip, `python -m job_manager` does the same.
 With MoleditPy 5.3 or later, the installed plugin starts the same way without
 opening the editor: `moleditpy -r job_manager` (add `-m` for the Host Monitor).
+Followed by a command, such as `moleditpy -r job_manager submit ...`, it runs the
+script command line described below instead and opens no window.
 
 Alternatively, run `python __main__.py` inside the plugin folder. On Windows,
 use `launch_job_manager.bat` or `launch_host_monitor.bat`; create a desktop

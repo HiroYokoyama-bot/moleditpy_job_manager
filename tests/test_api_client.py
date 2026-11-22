@@ -297,6 +297,90 @@ class TestTheCommandLine(ClientTestCase):
                 self.assertIn(command, parser.format_help())
 
 
+class TestThroughTheJobManagerEntryPoint(ClientTestCase):
+    """`moleditpy -r job_manager COMMAND` and `moleditpy-job-manager COMMAND`.
+
+    The registry installs the plugin with no `moleditpy-job` launcher, so its
+    users reach the command line through the package's own __main__. These run
+    it as a separate program, against the real server, as a script would.
+    """
+
+    def run_entry(self, *argv, env=None):
+        import subprocess
+        import sys
+
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        environment = {**os.environ, "PYTHONPATH": root, **(env or {})}
+
+        def go():
+            return subprocess.run(
+                [sys.executable, "-m", "job_manager", *argv],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                env=environment,
+                cwd=self.directory,
+            )
+
+        return in_thread(go, timeout=90)
+
+    def endpoint(self):
+        return [f"--url={self.server.url()}", f"--token={self.server.token()}"]
+
+    def test_a_command_reaches_the_running_job_manager(self):
+        result = self.run_entry(*self.endpoint(), "ping")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(json.loads(result.stdout)["ok"])
+
+    def test_hosts_and_a_submission_through_the_entry_point(self):
+        result = self.run_entry(*self.endpoint(), "--json", "hosts")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([host["name"] for host in json.loads(result.stdout)], ["mycluster"])
+        result = self.run_entry(
+            *self.endpoint(),
+            "--json",
+            "submit",
+            self.input_path,
+            "--host",
+            "mycluster",
+            "--command",
+            "mycommand {input}",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        job = json.loads(result.stdout)
+        self.assertEqual(job["host_name"], "mycluster")
+        self.assertIn(job["id"], self.store.jobs)
+
+    def test_a_failure_is_the_command_lines_exit_status(self):
+        result = self.run_entry(*self.endpoint(), "job", "nosuchjob")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("error:", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
+    def test_a_command_never_loads_qt(self):
+        # Discovery fails (an empty data folder), which is all this needs: the
+        # command ran, and Qt was never imported on the way.
+        import subprocess
+        import sys
+
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        empty = tempfile.mkdtemp(prefix="jm_entry_empty_")
+        code = (
+            "import sys; sys.argv = ['job_manager', 'ping']; "
+            "from job_manager.__main__ import main; status = main(); "
+            "print(status, any(name.startswith('PySide6') for name in sys.modules))"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env={**os.environ, "PYTHONPATH": root, "MOLEDITPY_JOB_MANAGER_DIR": empty},
+        )
+        self.assertEqual(result.stdout.split(), ["1", "False"], result.stderr)
+        self.assertIn("not running", result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -48,7 +48,7 @@ helper at `scripts/dispatch_scheduler_validation.py`.
 | `remote_runner*.py` | The helper queue for hosts with no scheduler (bash / PowerShell) |
 | `api_core.py` | what an API request means. Pure stdlib, so the pytest-only CI job covers it |
 | `api_server.py` | the loopback socket, the token, and the queued hop onto the GUI thread |
-| `api_client.py` | the client another program uses. Pure stdlib, and meant to be copyable |
+| `api_client.py` | the client another program uses, and its command line. Pure stdlib, and meant to be copyable; `__main__.py` hands it any command before importing Qt |
 | `*_dialog.py` | Qt only. No logic that is worth testing lives here |
 
 ## Things that have bitten, and must not again

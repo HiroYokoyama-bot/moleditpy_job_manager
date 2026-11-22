@@ -549,7 +549,9 @@ curl -s -H "$AUTH" "$URL/jobs/$JOB"
 ```
 
 Or let the shipped command line do it, which is the same thing with the
-discovery and the polling already written:
+discovery and the polling already written (`moleditpy-job` or
+`moleditpy -r job_manager` in place of `python -m job_manager.api_client`, as
+installed):
 
 ```bash
 python -m job_manager.api_client submit /data/h2o.inp     --host mycluster --command "/opt/orca/orca {input} > {stem}.out" --wait
