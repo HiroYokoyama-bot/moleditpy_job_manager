@@ -372,9 +372,9 @@ def _job_line(job: Dict[str, Any]) -> str:
     )
 
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser(prog: str = "moleditpy-job") -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="job-manager",
+        prog=prog,
         description="Submit to, and read, a running MoleditPy Job Manager.",
     )
     parser.add_argument("--url", default="", help="API base URL (default: discovered)")
@@ -572,8 +572,8 @@ def _submit_fields(args: argparse.Namespace) -> Dict[str, Any]:
     return fields
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
-    args = build_parser().parse_args(argv)
+def main(argv: Optional[Sequence[str]] = None, prog: str = "moleditpy-job") -> int:
+    args = build_parser(prog).parse_args(argv)
     try:
         client = JobManagerClient(url=args.url, token=args.token)
         return _run(client, args)

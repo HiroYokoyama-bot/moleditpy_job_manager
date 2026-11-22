@@ -116,6 +116,19 @@ cluster nothing — the plugin still polls the queue on its own schedule.
 
 ## The command line
 
+The commands below are the same however Job Manager was installed; only the
+start differs:
+
+| Installed as | Run |
+|---|---|
+| `pip install moleditpy-job-manager` | `moleditpy-job ping` |
+| Plugin in MoleditPy 5.3+ | `moleditpy -r job_manager ping` |
+| A copy of the `job_manager` folder | `python -m job_manager.api_client ping` |
+
+Given one of these commands, `moleditpy -r job_manager` and
+`moleditpy-job-manager` open no window and do not bring up a running one. Without
+a command they start the Job Monitor as before.
+
 ```bash
 python -m job_manager.api_client ping
 python -m job_manager.api_client hosts

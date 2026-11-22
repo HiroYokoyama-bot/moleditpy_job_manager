@@ -293,6 +293,12 @@ python -m job_manager.api_client submit h2o.inp --host mycluster --command "/opt
 python -m job_manager.api_client wait JOB_ID --download
 ```
 
+The same commands are reachable however Job Manager was installed:
+`moleditpy-job submit ...` after `pip install`, and
+`moleditpy -r job_manager submit ...` for the plugin installed in MoleditPy
+5.3+. Given a command, Job Manager opens no window; it talks to the one already
+running, whose Local API must be switched on.
+
 ```python
 from job_manager.api_client import JobManagerClient
 
