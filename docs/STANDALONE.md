@@ -85,6 +85,27 @@ It talks to a running Job Manager, so start the window and switch the API on
 once (**Settings... > Local API...**); it is served again at every launch until
 you switch it off. `python -m job_manager.api_client` is the same program.
 
+The plugin installed from the MoleditPy plugin registry has no `moleditpy-job`
+launcher. From 3.17.0 the Job Manager entry point takes the same commands, so
+with MoleditPy 5.3 or later:
+
+```bash
+moleditpy -r job_manager ping
+moleditpy -r job_manager submit h2o.inp --host myhost     --command "/opt/orca/orca {input} > {stem}.out" --wait
+moleditpy -r job_manager wait JOB_ID --download
+```
+
+`moleditpy-job-manager submit ...` and `python -m job_manager submit ...` work
+the same way. A first argument that is one of these commands, or one of their
+options `--url`, `--token` and `--json`, runs the command line: no window opens,
+a running Job Manager is not brought to the front, and no display is needed. Any
+other start opens the window, as before. The exit status is the command's own:
+0 on success, 1 for an API error, and 2 when a job waited for ends other than
+DONE or files were skipped, so a script can chain on it.
+
+`moleditpy -r job_manager --help` lists the commands; `COMMAND --help` describes
+one.
+
 ## Agents and scripts
 
 `submit --wait` submits, waits for the queue and downloads the results in one
@@ -126,7 +147,8 @@ The pip package and the plugin can be installed together without stepping on
 each other's files. MoleditPy loads the plugin from its plugin folder by path,
 and the plugin's own background process starts from that folder too, so
 neither picks up the pip copy; the `moleditpy-job-manager` and `moleditpy-job`
-commands run the pip copy.
+commands run the pip copy, and `moleditpy -r job_manager COMMAND` runs the
+plugin's.
 
 What they do share is the data folder. That is the point — one list of hosts
 and jobs, whichever way you open it — but it has two consequences:

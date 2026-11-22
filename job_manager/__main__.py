@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+import textwrap
 
 if __package__ is None or __package__ == "":
     parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -11,8 +12,6 @@ if __package__ is None or __package__ == "":
         sys.path.insert(0, parent_dir)
     pkg_name = os.path.basename(os.path.dirname(os.path.abspath(__file__)))
     __package__ = pkg_name
-
-from PySide6.QtWidgets import QApplication
 
 from . import PLUGIN_VERSION, get_service, instances
 from . import shutdown as release_service
@@ -22,6 +21,7 @@ HOST_MONITOR_FLAGS = ("--host-monitor", "--hosts", "host-monitor", "-m")
 HELP_FLAGS = ("-h", "--help")
 
 USAGE = """usage: moleditpy-job-manager [--host-monitor]
+       moleditpy-job-manager COMMAND ...
 
 Job Manager without the molecular editor: the Job Monitor, or with
 --host-monitor (-m) the Host Monitor. A second launch brings the running
@@ -31,9 +31,43 @@ The same program runs as:
   python -m job_manager             from the folder that contains job_manager/
   moleditpy -r job_manager          the plugin installed in MoleditPy 5.3+
 
-Submitting, waiting and fetching from a script: moleditpy-job
-(python -m job_manager.api_client), with the Local API switched on.
+Given a command, it is the script command line instead, the same as
+moleditpy-job. It talks to the Job Manager already running, whose Local API
+must be switched on, and opens no window:
+{commands}
+
+Help on one command: COMMAND --help.
 """
+
+#: Options of the command line that may come before its command.
+CLI_OPTIONS = ("--url", "--token", "--json")
+
+
+def _program() -> str:
+    """How this was started, so help names a command that exists."""
+    if "moleditpy.plugins.plugin_runner" in sys.modules:
+        return "moleditpy -r job_manager"
+    return "moleditpy-job-manager"
+
+
+def cli_commands() -> tuple:
+    """The script command line's commands, read from its own parser."""
+    import argparse
+
+    from .api_client import build_parser
+
+    for action in build_parser()._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            return tuple(action.choices)
+    return ()
+
+
+def is_cli(args) -> bool:
+    """Whether *args* ask for the script command line rather than a window."""
+    if not args:
+        return False
+    first = args[0]
+    return first in cli_commands() or first.split("=", 1)[0] in CLI_OPTIONS
 
 
 def _argument(args, name: str) -> str:
@@ -44,10 +78,27 @@ def _argument(args, name: str) -> str:
 
 def main() -> int:
     args = sys.argv[1:]
+    if is_cli(args):
+        # Before Qt and the instance lock: a script submitting a job must not
+        # bring the running Job Manager's window up, nor need a display.
+        from .api_client import main as cli
+
+        return cli(args, prog=_program())
     if any(arg in HELP_FLAGS for arg in args):
         # Before the instance lock: asking for help must not bring a running
         # Job Manager's window up, nor open one.
-        print(USAGE, end="")
+        print(
+            USAGE.replace("moleditpy-job-manager", _program()).format(
+                commands=textwrap.fill(
+                    " ".join(cli_commands()),
+                    76,
+                    initial_indent="  ",
+                    subsequent_indent="  ",
+                    break_on_hyphens=False,
+                )
+            ),
+            end="",
+        )
         return 0
     data_dir = default_data_dir()
     tray_mode = "--tray" in args
@@ -88,6 +139,8 @@ def main() -> int:
 
 
 def _run(args, data_dir: str, tray_mode: bool, host_view: bool, after_pid: int) -> int:
+    from PySide6.QtWidgets import QApplication
+
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName(f"Job Manager {PLUGIN_VERSION}")
 

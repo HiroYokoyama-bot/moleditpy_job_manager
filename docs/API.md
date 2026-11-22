@@ -116,6 +116,19 @@ cluster nothing — the plugin still polls the queue on its own schedule.
 
 ## The command line
 
+The commands below are the same however Job Manager was installed; only the
+start differs:
+
+| Installed as | Run |
+|---|---|
+| `pip install moleditpy-job-manager` | `moleditpy-job ping` |
+| Plugin in MoleditPy 5.3+ | `moleditpy -r job_manager ping` |
+| A copy of the `job_manager` folder | `python -m job_manager.api_client ping` |
+
+Given one of these commands, `moleditpy -r job_manager` and
+`moleditpy-job-manager` open no window and do not bring up a running one. Without
+a command they start the Job Monitor as before.
+
 ```bash
 python -m job_manager.api_client ping
 python -m job_manager.api_client hosts
@@ -536,7 +549,9 @@ curl -s -H "$AUTH" "$URL/jobs/$JOB"
 ```
 
 Or let the shipped command line do it, which is the same thing with the
-discovery and the polling already written:
+discovery and the polling already written (`moleditpy-job` or
+`moleditpy -r job_manager` in place of `python -m job_manager.api_client`, as
+installed):
 
 ```bash
 python -m job_manager.api_client submit /data/h2o.inp     --host mycluster --command "/opt/orca/orca {input} > {stem}.out" --wait

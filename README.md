@@ -238,6 +238,8 @@ moleditpy-job-manager --host-monitor
 From the plugin folder or the release zip, `python -m job_manager` does the same.
 With MoleditPy 5.3 or later, the installed plugin starts the same way without
 opening the editor: `moleditpy -r job_manager` (add `-m` for the Host Monitor).
+Followed by a command, such as `moleditpy -r job_manager submit ...`, it runs the
+script command line described below instead and opens no window.
 
 Alternatively, run `python __main__.py` inside the plugin folder. On Windows,
 use `launch_job_manager.bat` or `launch_host_monitor.bat`; create a desktop
@@ -292,6 +294,12 @@ External programs and AI agents can use the bundled command-line or Python clien
 python -m job_manager.api_client submit h2o.inp --host mycluster --command "/opt/orca/orca {input} > {stem}.out" --cpus 8 --memory 16GB
 python -m job_manager.api_client wait JOB_ID --download
 ```
+
+The same commands are reachable however Job Manager was installed:
+`moleditpy-job submit ...` after `pip install`, and
+`moleditpy -r job_manager submit ...` for the plugin installed in MoleditPy
+5.3+. Given a command, Job Manager opens no window; it talks to the one already
+running, whose Local API must be switched on.
 
 ```python
 from job_manager.api_client import JobManagerClient
