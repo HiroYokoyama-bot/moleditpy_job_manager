@@ -262,6 +262,8 @@ An AI agent running on the same machine as Job Manager can use the HTTP API,
 Python client or command-line client to submit calculations without opening the
 submission dialog. It can list configured hosts and presets, check host load
 and queue status, submit jobs, read logs, cancel jobs and download results.
+A ready-made operating procedure for agents is kept as a skill:
+[moleditpy-job-manager](skills/moleditpy-job-manager/SKILL.md).
 
 For multiple agents targeting one workstation, use the same host profile with
 **Queueing** set to **Queue them with a helper on the host**. Configure its
