@@ -196,7 +196,13 @@ before any of these, even when the user has asked for work in general:
 - `cancel`, `forget`, `hold`, `release`, `force` or `priority` on a job you
   did not just submit in this session. It may be someone else's calculation.
 - `force` in any case. It starts a job past the queue and past the core and
-  memory budgets other agents are relying on.
+  memory budgets other agents are relying on. On a Job Server host, force
+  run and `priority` are administrator operations, so the account the
+  manager signs in with needs that role or the server refuses with an
+  error saying so. Force there does not skip an After condition, and a
+  held Job Server job does not start even when forced, so release it
+  first. On a cluster host force is refused outright, because the
+  scheduler owns the order.
 - `host-queue` changes, which pause a host's queue or change its limits for
   everyone using that host.
 - Submitting a job whose cost is plainly large for the host it targets,
