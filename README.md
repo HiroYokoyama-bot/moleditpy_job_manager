@@ -52,21 +52,9 @@ heartbeat writes. Window activation requests write only when requested. After
 updating from 3.3.0 or earlier, quit all existing Job Manager monitors and tray
 processes before restarting; the old file-heartbeat protocol is no longer used.
 
-The file Text Viewer reads a file without changing it, and **Ctrl+S** there is
-Save As. **File > Edit Mode** (Ctrl+E) allows editing and makes **Ctrl+S**
-overwrite the file, keeping its encoding and line endings unless you choose others
-in the File menu. **File > New** starts a new file in Edit Mode. It also has Open,
-Print, Undo/Redo, Find and Replace, Go to Line, line numbers and zoom.
-
-The file Text Viewer has an **Open in MoleditPy** button. Passing the source
-file to the editor closes the viewer and its originating File Browser; cancelling
-or refusing the open leaves both windows available. Plain `.txt` files retain
-the existing protection against OpenBabel's text-to-molecules import.
-
-Job Server connections reuse expiring authentication state in memory across
-monitoring and file operations, avoiding a new authentication record on every
-poll. Credentials and certificate trust remain checked; bearer tokens are not
-saved to disk.
+Downloaded files open in the bundled file browser and text viewer, covered
+in [results](docs/WORKFLOW.md#5-results). How Job Server connections handle
+credentials and reuse authentication is in the [security model](docs/SECURITY_MODEL.md).
 
 Detailed instructions: [Standard workflow](docs/WORKFLOW.md).
 
@@ -108,10 +96,8 @@ Templates cover ORCA, Gaussian, CP2K, GAMESS, MOPAC, NWChem, Psi4, PySCF,
 Quantum ESPRESSO, VASP and xTB. Use the full executable path when needed,
 especially for ORCA: a bare `orca` can resolve to the Linux screen reader.
 
-Placeholders are written in braces, e.g. `{input}`. Available fields include
-`input`, `stem`, `output`, `1` `2` ... (the input files in order), `all`,
-`nodes`, `ntasks`, `cpus`, `memory`, `walltime` and `queue`. Save custom commands through **Template... → Save
-current command as...**.
+Placeholders are written in braces, e.g. `{input}`. Save custom commands
+through **Template... → Save current command as...**.
 
 The input table shows **File**, **Folder** and **Status**. Add or paste paths,
 or drag files onto the dialog. **Move up / Move down** selects the first input
@@ -124,105 +110,20 @@ requirements.
 
 ## Backends
 
-| Backend | Runs on | Requirements and authentication |
-|---|---|---|
-| OpenSSH (default) | Remote Linux or Windows host | `ssh` and `scp`; keys and ssh-agent; inherits `~/.ssh/config` and supports `ProxyJump` |
-| paramiko | Remote Linux or Windows host | Optional `paramiko` package; keys, agent or passwords; `ProxyJump` is refused |
-| This machine | Local Linux, macOS or Windows | No network or authentication; bash or the Windows PowerShell scheduler |
-| WSL | A Linux distribution on this Windows machine | WSL with bash; no SSH or authentication |
-| Job Server (HTTPS) | A LAN computational helper | Optional `cryptography>=50.0.2`; registered device key; bundled HTTP client |
+Five backends: OpenSSH (the default), paramiko, this machine, WSL and Job
+Server over HTTPS. They differ in where the job runs, how you sign in and
+what has to be installed, and each one has been checked with real jobs.
 
-OpenSSH uses batch mode so a background operation cannot wait for an invisible
-password prompt. For password-only hosts, choose paramiko and enable **Ask for a
-password when connecting**. SSH passwords stay in session memory and are never
-written to disk. Unknown host keys require fingerprint approval.
-
-For WSL, choose the distribution in **Hosts...** and use a Linux **Remote root**
-such as `~/moleditpy_jobs`. Inputs are copied into the distribution and results
-back to Windows. Files within the selected distribution can also be supplied
-through `\\wsl.localhost\Ubuntu\...` paths.
-
-See [WSL setup](docs/WORKFLOW.md#running-inside-wsl),
-[Job Server setup](docs/JOB_SERVER.md), and the
-[security model](docs/SECURITY_MODEL.md).
-
-### Verified backends
-
-These configurations have been checked with real jobs through submission,
-completion tracking, log reading and result download. Local and WSL checks
-cover both direct background mode and the built-in helper queue.
-
-| Backend | Verified environment | Evidence |
-|---|---|---|
-| OpenSSH | Linux hosts without a cluster scheduler | Verified in real use |
-| paramiko | Linux hosts without a cluster scheduler | Verified in real use |
-| This machine — bash | Linux and Git Bash on Windows | Real shell execution in the test suite and CI |
-| This machine — Windows scheduler | Native Windows PowerShell | Real direct and queued job execution in Windows CI |
-| WSL | Windows with Ubuntu, using real `wsl.exe` and bash | Verified locally with version **3.0.0** on **2026-10-14** |
-
-The Ubuntu checks include Windows input files, `\\wsl.localhost` paths, existing
-job directories, failed-command exit codes and jobs that continue after
-submission returns. Version **3.0.0** fixes a WSL launch race that could leave a
-job pending without a log. Real WSL tests run when a distribution with bash is
-available; Windows CI also tests the transport through a shell-backed stand-in.
-
-OpenSSH and paramiko are verified against real hosts; their automated transport
-tests additionally use mocked connections. A separate, manually dispatched
-[real scheduler workflow](tests/real_schedulers/README.md) provisions SLURM,
-OpenPBS and Grid Engine daemons in disposable environments and exercises them
-through real SSH, using synthetic inputs. It covers submission, result transfer,
-CPU allocation, cancellation, dependencies and scheduled starts. It does not run
-on routine pushes, PRs or releases.
-
-**Verified with real scheduler daemons on 2026-10-25:** all cases passed on
-SLURM 21.08.5, OpenPBS 23.06.06, and Debian Grid Engine 8.1.9.
-These used synthetic jobs, real SSH and single-node disposable environments.
-Single-node lab results do not certify every
-Torque/commercial UGE version, multinode MPI/GPU setup or site-specific policy.
+The full comparison, the password and host-key behaviour, the WSL path
+rules and the verification record are in [backends](docs/BACKENDS.md).
 
 ## Scheduling and monitoring
 
-On hosts without a cluster scheduler, the helper queue dispatches jobs within
-physical-core and memory budgets. It runs only while work remains, keeps its
-queue in readable files on the host, and supports dependencies, pausing and
-scheduled starts. **Priority** is a number from −1000 to 1000 (default 0): higher
-numbers run first, with submission order preserved for equal values. Use
-**Set Priority...** or the **Details** window to change it. **Hold** keeps an
-individual waiting helper job from starting; **Release** removes that manual
-hold while preserving After conditions and priority. Manual holds and After
-waits both display **HELD**, with their reasons. A chained-lanes mode is also available.
-
-Use **Wait for previous forced job** with **Force run** to serialize forced jobs on a host.
-**Tail File** beside **Tail Log** opens the existing file chooser and tail viewer.
-
-Double-click a waiting job to see its status, priority, and dependencies.
-Running jobs open their log; finished jobs open their results.
-
-Cluster jobs use the scheduler's own dependency and submission flags. Configure
-**Submit options** on the host or preset for billing groups, resource groups or
-other arguments that belong on the `sbatch`/`qsub` command line. Host options
-come first; arguments are parsed and quoted individually.
-
-Polling uses one queue-status request per host per cycle. The default is
-**120 seconds**, with a minimum of 5 seconds and a warning below 30 seconds.
-Polling stops when no jobs are active; connection failures trigger backoff.
-Use a longer per-host interval for shared login nodes and disable or slow host
-CPU/memory sampling where appropriate. **Refresh Now** requests an update;
-**View → Reload List** (`Ctrl+R`) rereads the saved job list.
-
-Generated wrappers write an exit-code sentinel atomically when they exit:
-zero means **DONE**, a nonzero code means **FAILED**, and a missing sentinel
-after the job disappears means **LOST**. Signal traps record termination codes
-such as 143 for SIGTERM. Jobs blocked by a failed dependency show **BLOCKED**.
-
-See the [helper queue](docs/RUNNER.md),
-[job states](docs/WORKFLOW.md#reading-job-states), and
-[troubleshooting](docs/WORKFLOW.md#troubleshooting).
-
-Dependencies form a chain, with one predecessor per job. There is no workflow
-graph or automatic retry; complex cluster dependencies can be supplied through
-extra scheduler directives. Job Server has its own queue and feature limits,
-described in [its setup guide](docs/JOB_SERVER.md).
+On a host without a cluster scheduler, the built-in helper queue dispatches
+jobs within physical-core and memory budgets, with priorities, holds,
+dependencies and scheduled starts. Cluster hosts use their scheduler's own
+flags instead. Polling, job states and the completion sentinel are covered
+in [scheduling and monitoring](docs/SCHEDULING.md).
 
 ## Standalone mode
 
@@ -241,18 +142,9 @@ opening the editor: `moleditpy -r job_manager` (add `-m` for the Host Monitor).
 Followed by a command, such as `moleditpy -r job_manager submit ...`, it runs the
 script command line described below instead and opens no window.
 
-Alternatively, run `python __main__.py` inside the plugin folder. On Windows,
-use `launch_job_manager.bat` or `launch_host_monitor.bat`; create a desktop
-shortcut to either file for one-click access. They use `pythonw` to avoid a
-persistent console window.
-
-Standalone uses the same hosts, job list, downloads and notifications as the
-plugin. Opening results in the molecular editor requires MoleditPy.
-
-A second standalone launch brings the existing Job Manager to the front instead
-of starting another tracker. In **Settings...**, **Keep the Job Manager running
-after MoleditPy closes** can leave it in the tray to poll, notify and download.
-This option is off by default.
+Standalone uses the same hosts, job list, downloads and notifications as
+the plugin. The Windows launchers, the tray option and what a second launch
+does are in [Job Manager without MoleditPy](docs/STANDALONE.md).
 
 ## Integrations
 
@@ -265,20 +157,11 @@ and queue status, submit jobs, read logs, cancel jobs and download results.
 A ready-made operating procedure for agents is kept as a skill:
 [moleditpy-job-manager](skills/moleditpy-job-manager/SKILL.md).
 
-For multiple agents targeting one workstation, use the same host profile with
-**Queueing** set to **Queue them with a helper on the host**. Configure its
-**Cores available** and **Memory available** budgets, and have each agent declare
-its job's CPU and memory requests. The shared queue starts jobs only when those
-requests fit the remaining budgets; other jobs wait. For example, with an
-8-core, 32 GB budget, jobs requesting 4 cores and 16 GB each run two at a time,
-even when several agents submit work at once.
-
-These budgets account for declared requests, rather than enforcing process
-CPU or memory limits. Set requests to match the calculation's actual usage,
-leave capacity for other applications, and avoid **Force run**, which bypasses
-the budgets. This coordination applies to jobs in the same helper queue;
-SLURM, PBS and SGE destinations use their scheduler's resource management.
-See the [helper queue guide](docs/RUNNER.md#scheduling-on-resources).
+For multiple agents targeting one workstation, use the same host profile
+with **Queueing** set to **Queue them with a helper on the host**: the shared
+queue starts each job only when its declared CPU and memory requests fit the
+remaining budget. How the budgets work is in the
+[helper queue guide](docs/RUNNER.md#scheduling-on-resources).
 
 Enable **Local API...** under **Extensions → Job Manager**, or under
 **Settings...** in the standalone Job Manager, and keep Job Manager running. The API is off by default, requires a token and binds only to
@@ -290,40 +173,13 @@ ORCA and Gaussian Input Generator Pro offer **Submit to Cluster...** beside
 Save when Job Manager is installed. Other plugins can call
 `job_manager.submit_file(paths, name="")` through the host's plugin list.
 
-External programs and AI agents can use the bundled command-line or Python client:
-
-```bash
-python -m job_manager.api_client submit h2o.inp --host mycluster --command "/opt/orca/orca {input} > {stem}.out" --cpus 8 --memory 16GB
-python -m job_manager.api_client wait JOB_ID --download
-```
-
-The same commands are reachable however Job Manager was installed:
+External programs and AI agents can use the bundled command-line or Python
+client. The same commands are reachable however Job Manager was installed:
 `moleditpy-job submit ...` after `pip install`, and
 `moleditpy -r job_manager submit ...` for the plugin installed in MoleditPy
-5.3+. Given a command, Job Manager opens no window; it talks to the one already
-running, whose Local API must be switched on.
-
-```python
-from job_manager.api_client import JobManagerClient
-
-client = JobManagerClient()
-job = client.submit(
-    host="mycluster",
-    files=["h2o.inp"],
-    command="/opt/orca/orca {input} > {stem}.out",
-    cpus_per_task=4,
-    memory="16GB",
-    fetch_globs=["*.out", "*.xyz"],
-)
-final = client.wait(job["id"])
-if final["state"] != "DONE":
-    raise RuntimeError(f"Job {final['id']}: {final['state']}")
-paths = client.download(final["id"], wait=True)["files"]
-```
-
-The client discovers the running Job Manager and uses the same submission
-service as the GUI. See [API documentation](docs/API.md) for authentication,
-endpoints and client examples.
+5.3+. Given a command, Job Manager opens no window; it talks to the one
+already running, whose Local API must be switched on. Command-line and
+Python examples are in the [API documentation](docs/API.md).
 
 ### Web monitor and notifications
 
@@ -340,40 +196,18 @@ webhooks, see [notifications](docs/WORKFLOW.md#being-told-when-a-job-ends).
 ## Where your data lives
 
 Persistent state is stored in `~/.moleditpy/job_manager/`, outside the plugin
-folder so updates preserve it.
-
-| File or folder | Purpose |
-|---|---|
-| `settings.json` | Hosts, presets, command templates and preferences; SSH passwords are not stored |
-| `jobs.pmejdb` | Tracked jobs, retained across application restarts |
-| `archived/jobs_<date>.pmejdb` | Job lists preserved by **Clear List** |
-| `downloads/` | Fetched results |
-| `api_token` / `api.json` | Local API secret and active endpoint |
-| `web_monitor_token` | Persistent web-monitor access token, separate from the API secret |
-
-New lists use SQLite for both internal storage and portable saved files.
-**File → Save As...** offers `.pmejdb` and legacy JSON `.pmejbs`. Both extensions
-are registered for File Import and drag-and-drop. Existing `jobs.pmejbs` or
-`jobs.json` stays in its original format until **File → Convert to Job Database...**
-is chosen. Conversion verifies the DB, archives the original bytes, then switches
-tracking to the DB. Close other windows using the legacy list before converting.
-Reading a file never converts or saves it.
-
-Use Save As to share a consistent snapshot; no result files or host credentials
-are embedded. SQLite uses rollback journaling, so a completed export is one file.
-Concurrent editing is intended for local processes with working filesystem locks,
-not a database opened from several computers through a sync folder.
-
-Job lists can also be exported to CSV. Archived lists open read-only.
-Result-folder imports also produce read-only lists. See
-[job-list management](docs/WORKFLOW.md#7-keeping-exporting-and-clearing-the-list)
-and the [security model](docs/SECURITY_MODEL.md) for storage and trust boundaries.
+folder so updates preserve it: settings, the job list, downloads and the API
+tokens. The file-by-file list, the job-list formats and the conversion rules
+are in [data files](docs/DATA_FILES.md).
 
 ## Documentation
 
 | Guide | Covers |
 |---|---|
 | [Standard workflow](docs/WORKFLOW.md) | Setup, submission, results, notifications and troubleshooting |
+| [Backends](docs/BACKENDS.md) | The five backends compared, sign-in behaviour and the verification record |
+| [Scheduling and monitoring](docs/SCHEDULING.md) | Helper queue priorities and holds, polling, job states and the completion sentinel |
+| [Data files](docs/DATA_FILES.md) | Where settings, job lists and tokens live, and the job-list formats |
 | [Without MoleditPy](docs/STANDALONE.md) | pip install, the standalone app and command line, sharing data with the plugin |
 | [Job Server](docs/JOB_SERVER.md) | LAN server setup, authentication and supported operations |
 | [Helper queue](docs/RUNNER.md) | Dispatch, dependencies, resource budgets and queue files |
@@ -382,6 +216,7 @@ and the [security model](docs/SECURITY_MODEL.md) for storage and trust boundarie
 | [Web monitor](docs/WEB_MONITOR.md) | Browser dashboard, Tailscale and data usage |
 | [Architecture](docs/ARCHITECTURE.md) | Service layers, threading, polling and plugin integration |
 | [Security model](docs/SECURITY_MODEL.md) | Credentials, host keys, downloads and trust boundaries |
+| [Development](docs/DEVELOPMENT.md) | Test tiers, CI coverage and the release workflow |
 
 ## Development
 
@@ -392,23 +227,8 @@ ruff format job_manager tests
 ruff check job_manager tests
 ```
 
-Most protocol and transport tests use fakes or mocks. Execution tests run actual
-bash or PowerShell scripts; WSL tests use a stand-in or a real installed
-distribution. GUI tests require PySide6. Tests with the real MoleditPy
-`PluginContext` also require a main-app checkout and `rdkit`.
-
-CI covers Python 3.11–3.13, real Qt, native Windows and integration with
-MoleditPy. Optional test tiers skip when their prerequisites are absent; CI
-enforces the tiers assigned to each job. See [CLAUDE.md](CLAUDE.md) for the
-development and release workflow.
-
-The Codecov badge combines the full Linux Qt suite, Windows (including native
-desktop tests), and real MoleditPy integration reports. CI preserves each XML
-report for comparison with the local `coverage.xml`. Coverage jobs check required
-dependencies and a usable Bash; the native Windows and real-context gates fail
-if their required tiers skip. Pinned test tooling and shared coverage settings measure the complete
-`job_manager` package, without additional coverage exclusions. A combined cross-platform
-report can cover more lines than a single-platform local run.
+Test tiers, CI coverage and the release workflow are described in
+[development notes](docs/DEVELOPMENT.md) and [CLAUDE.md](CLAUDE.md).
 
 ## License
 
