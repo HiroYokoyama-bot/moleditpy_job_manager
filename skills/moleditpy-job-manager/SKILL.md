@@ -128,6 +128,12 @@ Rules that keep a submission correct:
   actually use. On a helper-queue host those declarations are how several
   agents share one machine: jobs start only when their requests fit the
   remaining budget.
+- A job that asks for nothing waits for nothing. On a Job Server host,
+  `--cpus 0 --memory 0` reserves no budget, so the job starts at once
+  even when the budget is fully reserved — the shape for a test or check
+  script, or one that only waits for something else. It still counts
+  toward the owner's active-job limit on the server, and a hold, a
+  paused server or an After condition still holds it back.
 - A submit reply comes back while the job is still `UPLOADING`. Poll
   `job <id>`, or block with `wait`, before treating it as queued or done.
 - `submit --wait` submits, waits and downloads in one call, when a single
