@@ -48,6 +48,8 @@ def test_gui_bridge_cancels_undelivered_requests(mode):
     assert called == []
     assert not bridge._pending
     bridge.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert not shiboken6.isValid(bridge)
 
 
 def test_stopping_api_with_http_request_queued_keeps_destruction_on_gui(tmp_path):
