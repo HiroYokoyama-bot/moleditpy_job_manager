@@ -133,6 +133,14 @@ class TreeSorter:
                 self._sort_children(folder, column, descending)
 
 
+def reveal(item: QTreeWidgetItem) -> None:
+    """Open the folders ``item`` sits in, which start closed."""
+    parent = item.parent()
+    while parent is not None:
+        parent.setExpanded(True)
+        parent = parent.parent()
+
+
 def configure_tree(
     tree: QTreeWidget,
     headers: Sequence[str] = NAME_HEADERS,
@@ -201,6 +209,7 @@ __all__ = [
     "TreeSorter",
     "is_folder_row",
     "natural_key",
+    "reveal",
     "set_row_size",
     "FULL_HEADERS",
     "NAME_HEADERS",

@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 
 from . import PLUGIN_VERSION
 from .runner import is_plugin_file
-from .file_tree import configure_tree, folder_factory, make_filter_row
+from .file_tree import TreeSorter, configure_tree, folder_factory, make_filter_row, reveal
 from .theme import apply_theme
 from .tree_utils import (
     PATH_ROLE,
@@ -71,6 +71,7 @@ class TailFileDialog(QDialog):
         layout.addLayout(filter_row)
 
         self.tree = configure_tree(QTreeWidget())
+        self.sorter = TreeSorter(self.tree)
         self.tree.itemDoubleClicked.connect(self._on_item_double_clicked)
         self.tree.itemSelectionChanged.connect(self._on_selection_changed)
         layout.addWidget(self.tree, 1)
@@ -87,7 +88,9 @@ class TailFileDialog(QDialog):
         box.rejected.connect(self.reject)
         layout.addWidget(box)
 
-    def _build_tree(self, names: Sequence[str], default_file: str = "") -> None:
+    def _build_tree(
+        self, names: Sequence[str], default_file: str = "", filtering: bool = False
+    ) -> None:
         """One item per path segment; files carry their full relative path."""
         self.tree.clear()
         folders: Dict[tuple, QTreeWidgetItem] = {}
@@ -110,7 +113,7 @@ class TailFileDialog(QDialog):
             if not parts:
                 continue
             parent = ensure_folder_item(
-                self.tree, folders, parts[:-1], folder_factory=styled_folder
+                self.tree, folders, parts[:-1], folder_factory=styled_folder, expand=False
             )
             leaf = parts[-1]
             item = QTreeWidgetItem(parent) if parent is not None else QTreeWidgetItem(self.tree)
@@ -119,13 +122,15 @@ class TailFileDialog(QDialog):
             if default_file and (name == default_file or leaf == default_file):
                 default_item = item
 
-        self.tree.expandAll()
+        self.sorter.sort()
+        if filtering:
+            # Every row left is a match; folders closed would hide them.
+            self.tree.expandAll()
+        if default_item is None and names:
+            default_item = find_first_leaf_item(self.tree)
         if default_item is not None:
+            reveal(default_item)
             self.tree.setCurrentItem(default_item)
-        elif names:
-            first = find_first_leaf_item(self.tree)
-            if first is not None:
-                self.tree.setCurrentItem(first)
 
     def _apply_filter(self, text: str) -> None:
         filter_text = text.strip().lower()
@@ -133,7 +138,7 @@ class TailFileDialog(QDialog):
             filtered = self._all_names
         else:
             filtered = [n for n in self._all_names if filter_text in n.lower()]
-        self._build_tree(filtered)
+        self._build_tree(filtered, filtering=bool(filter_text))
         if hasattr(self, "btn_tail"):
             self.btn_tail.setEnabled(bool(self.chosen()))
 

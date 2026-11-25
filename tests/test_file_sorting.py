@@ -155,5 +155,55 @@ class TestJobFilesFolders(unittest.TestCase):
         self.assertEqual(names(self.dialog.tree.invisibleRootItem()), ["sub", "b.out", "a.out"])
 
 
+class TestPickerLists(unittest.TestCase):
+    """The tail and download choosers: folders first and closed, the pick in view."""
+
+    def top(self, tree, name):
+        root = tree.invisibleRootItem()
+        return next(
+            root.child(i) for i in range(root.childCount()) if root.child(i).text(0) == name
+        )
+
+    def test_tail_file_opens_only_the_folder_of_the_default_file(self):
+        from job_manager.tail_file_dialog import TailFileDialog
+
+        dialog = TailFileDialog(
+            "job", ["z.log", "run/opt/calc.out", "other/x.dat"], default_file="run/opt/calc.out"
+        )
+        self.addCleanup(dialog.deleteLater)
+        self.assertEqual(names(dialog.tree.invisibleRootItem()), ["other", "run", "z.log"])
+        self.assertEqual(dialog.chosen(), "run/opt/calc.out")
+        self.assertTrue(self.top(dialog.tree, "run").isExpanded())
+        self.assertFalse(self.top(dialog.tree, "other").isExpanded())
+
+    def test_tail_file_filter_shows_every_match(self):
+        from job_manager.tail_file_dialog import TailFileDialog
+
+        dialog = TailFileDialog("job", ["a/x.out", "b/x.out", "c.log"])
+        self.addCleanup(dialog.deleteLater)
+        dialog.txt_filter.setText("x.out")
+        self.assertTrue(self.top(dialog.tree, "a").isExpanded())
+        self.assertTrue(self.top(dialog.tree, "b").isExpanded())
+
+    def test_download_opens_only_folders_with_a_ticked_file(self):
+        from job_manager.download_dialog import DownloadDialog
+
+        temp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, temp, True)
+        dialog = DownloadDialog(
+            "job",
+            ["step10.out", "step2.out", "scratch/tmp.chk", "keep/result.xyz"],
+            ["keep/result.xyz"],
+            temp,
+            "Download",
+        )
+        self.addCleanup(dialog.deleteLater)
+        self.assertEqual(
+            names(dialog.tree.invisibleRootItem()), ["keep", "scratch", "step2.out", "step10.out"]
+        )
+        self.assertTrue(self.top(dialog.tree, "keep").isExpanded())
+        self.assertFalse(self.top(dialog.tree, "scratch").isExpanded())
+
+
 if __name__ == "__main__":
     unittest.main()

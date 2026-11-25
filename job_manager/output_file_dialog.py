@@ -34,6 +34,7 @@ from .file_tree import (
     configure_tree,
     folder_factory,
     make_filter_row,
+    reveal,
     set_row_size,
 )
 from .models import Job
@@ -559,10 +560,7 @@ class OutputFileSelectorDialog(QDialog):
 
     def _select(self, item: QTreeWidgetItem) -> None:
         """Select a row, opening the folders it is in: they start closed."""
-        parent = item.parent()
-        while parent is not None:
-            parent.setExpanded(True)
-            parent = parent.parent()
+        reveal(item)
         self.tree.setCurrentItem(item)
 
     @staticmethod
