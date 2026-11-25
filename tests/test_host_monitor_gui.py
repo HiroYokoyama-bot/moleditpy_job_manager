@@ -609,7 +609,7 @@ class TestTheRowMenu(DialogTestCase):
 
     def test_every_button_is_offered(self):
         labels = [action.text() for action in self.menu_entries()]
-        for expected in ("Tail Log", "Details", "Download", "Resubmit", "Remove"):
+        for expected in ("Log", "Details", "Download", "Resubmit", "Remove"):
             self.assertIn(expected, labels)
 
     def test_an_action_that_cannot_run_is_disabled(self):

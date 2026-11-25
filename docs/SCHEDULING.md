@@ -11,7 +11,7 @@ hold while preserving After conditions and priority. Manual holds and After
 waits both display **HELD**, with their reasons. A chained-lanes mode is also available.
 
 Use **Wait for previous forced job** with **Force run** to serialize forced jobs on a host.
-**Tail File** beside **Tail Log** opens the existing file chooser and tail viewer.
+**Tail File** beside **Log** opens the existing file chooser and tail viewer.
 
 Double-click a waiting job to see its status, priority, and dependencies.
 Running jobs open their log; finished jobs open their results.

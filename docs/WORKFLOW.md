@@ -975,7 +975,7 @@ both the viewer and the file list it came from. Cancelling or refusing the
 open leaves both windows open. Plain `.txt` files keep this button disabled to
 avoid OpenBabel treating arbitrary text as molecules. **Ctrl+F** searches the
 text — Enter or F3 for the next match, Shift for
-the one before. The same window shows **Tail Log** and **Details**.
+the one before. The same window shows **Log** and **Details**.
 
 When a job was submitted with **Open the results in MoleditPy when they arrive**
 ticked, the most interesting file — `.out`, then `.log`, `.fchk`, `.hess`,
@@ -993,7 +993,7 @@ canvas beside a 3D view of what came back. You are asked about unsaved work
 exactly as **File > New** would ask, and answering Cancel leaves both your
 document and the result alone.
 
-**Tail Log** reads the last 200 lines of the running job's log without
+**Log** reads the last 200 lines of the running job's log without
 downloading anything.
 
 ## 6. Resubmit
@@ -1019,7 +1019,10 @@ not in the helper, so the next submission starts a fresh helper and takes the
 The **File** menu deals with the list as a whole. The toolbar keeps **New Job**,
 **Refresh Now** and **Host Monitor** visible. Selected-job operations are in the
 **Job** menu, **Job Actions** dropdown and the row's context menu; **Job Files**,
-**Download**, **Tail Log** and **Details** also have buttons below the table.
+**Download**, **Log** and **Details** also have buttons below the table.
+**Log** sits at the right end of that row. The button a double-click on the
+selected job would press — **Details** for a waiting job, **Log** for a
+running one, **Job Files** for a finished one — is tinted light green.
 **Job Files** needs no download or mirror: it lists the job's directory on the
 host beside any files already downloaded, and opening a file that is only on the
 host downloads it first. Downloaded files show at once; the host's files join them
@@ -1137,7 +1140,7 @@ Ctrl-C / SIGINT, `129` is SIGHUP.
 `LOST` means the job left the queue without the wrapper writing its exit code —
 killed hard (`SIGKILL`, OOM killer), the node fell over, or the job directory
 vanished. The remote directory is still listed in the tooltip; **Download** and
-**Tail Log** still work, and the log usually says why.
+**Log** still work, and the log usually says why.
 
 A job can also read `LOST` when it did finish: the exit-code file was not
 visible yet when the poll looked, which a networked filesystem can do for a
@@ -1186,7 +1189,7 @@ helper is running — it only ever reads what is under `.moleditpy_runner/`.
 | Submitted, but no queue id | The submit command printed something unexpected. The job may really be queued — check with `squeue` before resubmitting |
 | Everything `LOST` right after submitting | The scheduler on the host profile does not match reality (e.g. SLURM selected on a PBS site) |
 | Nothing downloads | The fetch patterns match nothing. Press **Download**: it lists what is actually in the job directory and ticks what matched, so a wrong pattern is visible rather than silent |
-| `job.log` is not among the results | Deliberate: it is the wrapper's own log, not the calculation's output, and is never downloaded. **Tail Log** reads it on the host |
+| `job.log` is not among the results | Deliberate: it is the wrapper's own log, not the calculation's output, and is never downloaded. **Log** reads it on the host |
 | A custom command you saved is not in the dropdown | See below |
 | Results in a sub-directory are not fetched | A pattern only reaches as deep as it is written. `*.out` means the job directory; use `scratch/*.out`, `*/*.out`, or `**/*.out` for any depth |
 | Poll errors, then silence | Per-host backoff, up to 15 minutes. **Refresh Now** clears it |

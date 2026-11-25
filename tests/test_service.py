@@ -341,7 +341,7 @@ class TestRoundTrip(ServiceTestCase):
         self.assertFalse(job.downloaded)
 
     def test_a_failed_job_leaves_the_wrapper_log_on_the_host(self):
-        # It is this plugin's file, not a result. Tail Log reads it where it
+        # It is this plugin's file, not a result. Log reads it where it
         # lives, and the download chooser lists it for anyone who wants it.
         job = self.submit()
         self.transport.clear_rules()

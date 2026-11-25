@@ -55,10 +55,49 @@ class TestWaitingJobDoubleClick(DialogTestCase):
     def test_tail_file_toolbar_reuses_the_existing_action(self):
         dialog = JobsDialog(self.service)
         self.addCleanup(dialog.deleteLater)
-        actions = dialog.job_toolbar.actions()
-        assert (
-            actions.index(dialog.job_actions["tail_file"])
-            == actions.index(dialog.job_actions["tail"]) + 1
-        )
+        assert dialog.job_actions["tail_file"] in dialog.job_toolbar.actions()
         assert dialog.btn_tail_file.defaultAction() is dialog.job_actions["tail_file"]
         assert dialog.btn_tail_file.text() == "Tail File..."
+
+
+class TestLogButtonPlace(DialogTestCase):
+    def test_log_is_the_rightmost_button(self):
+        dialog = JobsDialog(self.service)
+        self.addCleanup(dialog.deleteLater)
+        actions = dialog.job_toolbar.actions()
+        assert actions[-1] is dialog.job_actions["tail"]
+        assert dialog.btn_tail.text() == "Log"
+        assert dialog.btn_tail.property("jobManagerAction") is True
+
+
+class TestDoubleClickTargetTint(DialogTestCase):
+    def marked(self, dialog):
+        return [
+            name
+            for name, button in (
+                ("details", dialog.btn_details),
+                ("open", dialog.btn_open),
+                ("tail", dialog.btn_tail),
+            )
+            if button.property("doubleClickTarget")
+        ]
+
+    def test_the_button_a_double_click_runs_is_marked(self):
+        job = Job(
+            id="run1",
+            host_id=self.host.id,
+            state=STATE_RUNNING,
+            remote_dir="/work/myjob",
+            log_file="job.log",
+        )
+        self.store.add_job(job)
+        dialog = JobsDialog(self.service)
+        self.addCleanup(dialog.deleteLater)
+        assert self.marked(dialog) == []
+        dialog.table.selectRow(0)
+        assert self.marked(dialog) == ["tail"]
+        job.state = STATE_PENDING
+        dialog._update_actions()
+        assert self.marked(dialog) == ["details"]
+        dialog.table.clearSelection()
+        assert self.marked(dialog) == []

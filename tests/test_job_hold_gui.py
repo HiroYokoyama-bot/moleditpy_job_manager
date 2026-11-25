@@ -263,3 +263,21 @@ class TestJobServerQueuePosition(DialogTestCase):
         self.service.job_updated.emit(job.id)
         assert model.data(state) == "RUNNING"
         assert "Queue position" not in monitor._describe(job)
+
+
+class TestFinishedJobDetails(DialogTestCase):
+    def test_download_when_the_job_ends_is_greyed_once_it_has_ended(self):
+        job = self.store.add_job(Job(id="j1", host_id=self.host.id, name="calc", state="RUNNING"))
+        monitor = JobsDialog(self.service)
+        self.addCleanup(monitor.deleteLater)
+        details = JobDetailsDialog(
+            self.service, job, monitor._describe(job), "Details", describe=monitor._describe
+        )
+        self.addCleanup(details.deleteLater)
+        assert details.chk_auto.isEnabled()
+        job.state = "DONE"
+        self.service.job_updated.emit(job.id)
+        assert not details.chk_auto.isEnabled()
+        # The name, patterns and folder still matter for a later Download.
+        assert details.txt_globs.isEnabled()
+        assert details.txt_local.isEnabled()

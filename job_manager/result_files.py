@@ -21,7 +21,7 @@ PARTIAL_SUFFIX = ".moleditpy-part"
 
 #: Files this plugin puts in the job directory itself. None of them is a
 #: result: the wrapper's log holds whatever the command wrote to the terminal,
-#: the sentinel holds one number, and the script is the script. Tail Log reads
+#: the sentinel holds one number, and the script is the script. Log reads
 #: the log on the host, which is where it belongs.
 def is_plugin_file(name: str, log_file: str = "") -> bool:
     """True for a file this plugin wrote, rather than the calculation."""
@@ -216,7 +216,7 @@ def fetch_results(
     # file the command was told to write. It used to be forced into every
     # download, and `*.log` in the default patterns fetched it besides -- so a
     # directory of results carried a job.log next to the .out nobody wanted to
-    # tell apart. It stays on the host, where Tail Log reads it live.
+    # tell apart. It stays on the host, where Log reads it live.
     #
     # Never automatically: it is this plugin's file rather than the
     # calculation's output, and a results directory should hold only what the

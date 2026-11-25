@@ -369,11 +369,10 @@ class JobsDialog(QDialog):
     def _build_job_toolbar(self, layout: QVBoxLayout) -> None:
         self.job_toolbar = action_toolbar(
             self,
-            (self.job_actions[key] for key in ("open", "download", "tail", "tail_file", "details")),
+            (self.job_actions[key] for key in ("open", "download", "tail_file", "details")),
         )
         self.btn_open = self.job_toolbar.widgetForAction(self.job_actions["open"])
         self.btn_download = self.job_toolbar.widgetForAction(self.job_actions["download"])
-        self.btn_tail = self.job_toolbar.widgetForAction(self.job_actions["tail"])
         self.btn_tail_file = self.job_toolbar.widgetForAction(self.job_actions["tail_file"])
         self.btn_details = self.job_toolbar.widgetForAction(self.job_actions["details"])
         spacer = QWidget(self.job_toolbar)
@@ -385,6 +384,11 @@ class JobsDialog(QDialog):
         self.btn_job_actions.setMenu(self.menu_job)
         self.btn_job_actions.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.job_toolbar.addWidget(self.btn_job_actions)
+        # At the far right, where it is found without reading the row: the
+        # log is what is checked most often while a job runs.
+        self.job_toolbar.addAction(self.job_actions["tail"])
+        self.btn_tail = self.job_toolbar.widgetForAction(self.job_actions["tail"])
+        self.btn_tail.setProperty("jobManagerAction", True)
         layout.addWidget(self.job_toolbar)
 
     def _connect_service(self) -> None:
@@ -552,6 +556,7 @@ class JobsDialog(QDialog):
         }
         for key, action in self.job_actions.items():
             action.setEnabled(bool(states.get(key, True) and key not in self._busy_actions))
+        self._mark_double_click_target(job)
         self.btn_job_actions.setEnabled(job is not None)
 
     def _set_action_busy(self, key: str, busy: bool) -> None:
@@ -996,11 +1001,10 @@ class JobsDialog(QDialog):
             return
         self.service.download(job, into=folder, names=chosen)
 
-    def _open_double_clicked(self) -> None:
-        """Show waiting-job details, running logs, or finished-job results."""
-        job = self.selected_job()
+    def _double_click_action(self, job) -> str:
+        """The action a double-click on ``job`` runs: details, open, tail or ""."""
         if job is None:
-            return
+            return ""
         display = self.model.display_state(job)
         # A Job Server job shown QUEUED has not started either; an SSH job
         # shown QUEUED has a live wrapper to tail, so only the former joins
@@ -1013,13 +1017,37 @@ class JobsDialog(QDialog):
             STATE_HELD,
             STATE_BLOCKED,
         ) or (display == STATE_QUEUED and job.server_job_id):
-            self._show_details()
-            return
+            return "details"
         if job.is_terminal and self.job_actions["open"].isEnabled():
-            self._open_selected_result()
-            return
+            return "open"
         if self.job_actions["tail"].isEnabled():
+            return "tail"
+        return ""
+
+    def _open_double_clicked(self) -> None:
+        """Show waiting-job details, running logs, or finished-job results."""
+        target = self._double_click_action(self.selected_job())
+        if target == "details":
+            self._show_details()
+        elif target == "open":
+            self._open_selected_result()
+        elif target == "tail":
             self._tail_selected()
+
+    def _mark_double_click_target(self, job) -> None:
+        """Tint the button a double-click would press, so the row says what it does."""
+        target = self._double_click_action(job)
+        for key, button in (
+            ("details", self.btn_details),
+            ("open", self.btn_open),
+            ("tail", self.btn_tail),
+        ):
+            marked = key == target
+            if bool(button.property("doubleClickTarget")) != marked:
+                button.setProperty("doubleClickTarget", marked)
+                # A dynamic property is only read by the style sheet on a re-polish.
+                button.style().unpolish(button)
+                button.style().polish(button)
 
     def _tail_selected(self) -> None:
         job = self.selected_job()
@@ -1076,7 +1104,7 @@ class JobsDialog(QDialog):
             from .tail_file_dialog import TailFileDialog
 
             # The calculation's own output, never the wrapper's log -- that is
-            # what the Tail Log button already opens. Still in the list, since
+            # what the Log button already opens. Still in the list, since
             # asking for it deliberately is allowed; just not preselected.
             dialog = TailFileDialog(
                 job.name,

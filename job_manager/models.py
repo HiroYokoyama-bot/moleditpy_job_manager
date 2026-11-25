@@ -603,7 +603,7 @@ class Job:
     #: Fetch everything the job wrote, not just :attr:`fetch_globs`, when it
     #: downloads by itself. Chosen per job in the submit wizard.
     download_all: bool = False
-    #: Relative to remote_dir; what "Tail Log" reads and what the round trip opens.
+    #: Relative to remote_dir; what "Log" reads and what the round trip opens.
     log_file: str = ""
     command: str = ""
     #: The SubmitPreset used, snapshotted so Resubmit can reproduce the job
