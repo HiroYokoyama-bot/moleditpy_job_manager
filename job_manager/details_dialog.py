@@ -202,6 +202,15 @@ class JobDetailsDialog(QDialog):
     def _refresh_queue(self, *_args) -> None:
         current = self.service.store.jobs.get(self.job.id) is self.job
         editable = current and not self.read_only and not self._queue_busy
+        # Nothing ends again, so "download when the job ends" cannot happen.
+        finished = self.job.is_terminal
+        self.chk_auto.setEnabled(not self.read_only and not finished)
+        self.chk_auto.setToolTip(
+            "The job has ended. Press Download to fetch its results."
+            if finished
+            else "Fetch the results as soon as the job finishes. Unticked, they stay "
+            "on the host until you press Download."
+        )
         reasons = hold_reasons(self.job, self.service.store.jobs)
         self.lbl_hold.setText(" / ".join(reasons) or "None")
         can_priority = editable and not self.service.priority_refusal(self.job)
