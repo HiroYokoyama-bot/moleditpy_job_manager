@@ -45,7 +45,8 @@ RESULT_PRIORITY = (".out", ".log", ".fchk", ".hess", ".molden", ".cube", ".xyz")
 
 
 def likely_outputs(names: Sequence[str], log_file: str = "") -> List[str]:
-    """The files worth offering, in priority order; never the plugin's own.
+    """The files worth offering, shallowest and then best extension first;
+    never the plugin's own.
 
     Used to preselect: the Open Result window opens on one of these, and the
     download chooser ticks them when the fetch patterns matched nothing at all
@@ -57,6 +58,9 @@ def likely_outputs(names: Sequence[str], log_file: str = "") -> List[str]:
     ranked: List[str] = []
     for extension in RESULT_PRIORITY:
         ranked += [name for name in candidates if name.lower().endswith(extension)]
+    # Nearest the job directory first: a deeper file is usually a step's
+    # scratch copy, and the job's own result sits at the top.
+    ranked.sort(key=lambda name: name.replace("\\", "/").count("/"))
     # Deduplicated, keeping the best rank each file reached.
     seen = set()
     ordered = []

@@ -28,7 +28,14 @@ from PySide6.QtWidgets import (
 )
 
 from . import PLUGIN_VERSION
-from .file_tree import FULL_HEADERS, configure_tree, folder_factory, make_filter_row
+from .file_tree import (
+    FULL_HEADERS,
+    TreeSorter,
+    configure_tree,
+    folder_factory,
+    make_filter_row,
+    set_row_size,
+)
 from .models import Job
 from .theme import apply_theme, mark_muted
 from .tree_utils import (
@@ -113,7 +120,7 @@ class OutputFileSelectorDialog(QDialog):
         #: service, which outlives this window. See :meth:`_disconnect_download`.
         self._pending: List[tuple] = []
 
-        self.setWindowTitle(f"Job Manager {PLUGIN_VERSION} - File Browser: {job.name}")
+        self.setWindowTitle(f"Job Manager {PLUGIN_VERSION} - Job Files: {job.name}")
         apply_theme(self)
         self.resize(960, 480)
 
@@ -141,6 +148,7 @@ class OutputFileSelectorDialog(QDialog):
         self.tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.tree.header().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.tree.header().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        self.sorter = TreeSorter(self.tree, lambda: self._apply_filter(self.txt_filter.text()))
         self.tree.itemDoubleClicked.connect(lambda item, _: self._open_item(item, as_text=True))
         self.tree.itemSelectionChanged.connect(self._on_selection_changed)
         layout.addWidget(self.tree, 1)
@@ -278,35 +286,41 @@ class OutputFileSelectorDialog(QDialog):
 
     def _populate_tree_local(self, paths: Sequence[str]) -> None:
         """Fill tree with local and mirrored files structured as a folder hierarchy."""
+        opened = self._open_folder_keys()
         self.tree.clear()
         self._all_items.clear()
 
         from .runner import primary_output
 
-        # Never the wrapper's own job.log: it is this plugin's file, and
-        # opening it is not what "open the result" means.
-        primary_path = primary_output(list(paths), self.job.log_file)
         selected_item: Optional[QTreeWidgetItem] = None
         mirror_dir = self._mirrored_job_dir()
         norm_mirror = os.path.normpath(mirror_dir) if mirror_dir else ""
         cache_dir = self._cache_dir()
         folders: dict = {}
+        relative = {path: self._relative_local_path(path, norm_mirror, cache_dir) for path in paths}
+        # Never the wrapper's own job.log: it is this plugin's file, and
+        # opening it is not what "open the result" means. Ranked by the names
+        # shown, so a mirror and the cache count depth from the same place.
+        primary_rel = primary_output(list(relative.values()), self.job.log_file)
+        primary_path = next((p for p, r in relative.items() if r == primary_rel), "")
 
         for path in paths:
-            rel_name = self._relative_local_path(path, norm_mirror, cache_dir)
+            rel_name = relative[path]
             parts = split_path(rel_name)
             if not parts:
                 continue
 
             parent = ensure_folder_item(
-                self.tree, folders, parts[:-1], folder_factory(columns=len(FULL_HEADERS))
+                self.tree,
+                folders,
+                parts[:-1],
+                folder_factory(columns=len(FULL_HEADERS)),
+                expand=False,
             )
             filename = parts[-1]
 
-            try:
-                size_str = format_file_size(os.path.getsize(path))
-            except OSError:
-                size_str = "-"
+            size = self._bytes_of(path)
+            size_str = "-" if size is None else format_file_size(size)
             type_str = describe_file_type(filename)
             if norm_mirror and _is_within(path, norm_mirror):
                 location = "Mirror (no download needed)"
@@ -316,6 +330,7 @@ class OutputFileSelectorDialog(QDialog):
                 tooltip = path
 
             item = QTreeWidgetItem([filename, size_str, type_str, location])
+            set_row_size(item, size)
             item.setData(0, PATH_ROLE, path)
             item.setData(0, IS_REMOTE_ROLE, False)
             item.setToolTip(0, tooltip)
@@ -329,10 +344,12 @@ class OutputFileSelectorDialog(QDialog):
             if path == primary_path:
                 selected_item = item
 
+        self._reopen_folders(folders, opened)
+        self.sorter.sort()
         if selected_item is not None:
-            self.tree.setCurrentItem(selected_item)
+            self._select(selected_item)
         elif self._all_items:
-            self.tree.setCurrentItem(self._all_items[0])
+            self._select(self._all_items[0])
         # This window's own pick, not the user's: the host's listing may
         # choose a better primary output when it arrives.
         self._auto_key = self._item_key(self.tree.currentItem())
@@ -391,6 +408,7 @@ class OutputFileSelectorDialog(QDialog):
         kept = self._item_key(self.tree.currentItem())
         if kept == getattr(self, "_auto_key", ""):
             kept = ""
+        opened = self._open_folder_keys()
         self.tree.clear()
         self._all_items.clear()
 
@@ -413,7 +431,11 @@ class OutputFileSelectorDialog(QDialog):
 
         def place(item: QTreeWidgetItem, parts: Sequence[str]) -> None:
             parent = ensure_folder_item(
-                self.tree, folders, parts[:-1], folder_factory(columns=len(FULL_HEADERS))
+                self.tree,
+                folders,
+                parts[:-1],
+                folder_factory(columns=len(FULL_HEADERS)),
+                expand=False,
             )
             if parent is None:
                 self.tree.addTopLevelItem(item)
@@ -452,6 +474,7 @@ class OutputFileSelectorDialog(QDialog):
             item = QTreeWidgetItem(
                 [parts[-1], self._size_of(path), describe_file_type(parts[-1]), "Local"]
             )
+            set_row_size(item, self._bytes_of(path))
             item.setData(0, PATH_ROLE, path)
             item.setData(0, IS_REMOTE_ROLE, False)
             item.setToolTip(0, path)
@@ -459,9 +482,11 @@ class OutputFileSelectorDialog(QDialog):
             if kept and "/".join(parts) == kept:
                 kept_item = item
 
+        self._reopen_folders(folders, opened)
+        self.sorter.sort()
         current = kept_item or selected_item or (self._all_items[0] if self._all_items else None)
         if current is not None:
-            self.tree.setCurrentItem(current)
+            self._select(current)
 
         here = sum(1 for item in self._all_items if not item.data(0, IS_REMOTE_ROLE))
         status = f"{len(listed)} file(s) on host, {here} available here"
@@ -508,6 +533,39 @@ class OutputFileSelectorDialog(QDialog):
             return "-"
 
     @staticmethod
+    def _bytes_of(path: str) -> Optional[int]:
+        try:
+            return os.path.getsize(path)
+        except OSError:
+            return None
+
+    def _open_folder_keys(self) -> set:
+        """The folders the user has open, to keep open when the tree is rebuilt."""
+        keys = set()
+        stack = [self.tree.topLevelItem(i) for i in range(self.tree.topLevelItemCount())]
+        while stack:
+            item = stack.pop()
+            if item.childCount():
+                if item.isExpanded():
+                    keys.add(self._item_key(item))
+                stack.extend(item.child(i) for i in range(item.childCount()))
+        return keys
+
+    @staticmethod
+    def _reopen_folders(folders: dict, keys: set) -> None:
+        for parts, folder in folders.items():
+            if "/".join(parts) in keys:
+                folder.setExpanded(True)
+
+    def _select(self, item: QTreeWidgetItem) -> None:
+        """Select a row, opening the folders it is in: they start closed."""
+        parent = item.parent()
+        while parent is not None:
+            parent.setExpanded(True)
+            parent = parent.parent()
+        self.tree.setCurrentItem(item)
+
+    @staticmethod
     def _item_key(item: Optional[QTreeWidgetItem]) -> str:
         """A row's place in the tree, the same whether it was drawn as a local
         file or as a host file."""
@@ -527,9 +585,11 @@ class OutputFileSelectorDialog(QDialog):
         local_path = local_map.get("/".join(parts))
         if local_path is None and len(parts) == 1:
             local_path = local_map.get(filename)
+        size: Optional[int] = None
         if local_path is not None:
             try:
-                size_str = format_file_size(os.path.getsize(local_path))
+                size = os.path.getsize(local_path)
+                size_str = format_file_size(size)
             except OSError:
                 size_str = "-"
             location = "Local"
@@ -538,7 +598,8 @@ class OutputFileSelectorDialog(QDialog):
             tooltip = target_data
         elif mirrored_path and os.path.isfile(mirrored_path):
             try:
-                size_str = format_file_size(os.path.getsize(mirrored_path))
+                size = os.path.getsize(mirrored_path)
+                size_str = format_file_size(size)
             except OSError:
                 size_str = "-"
             location = "Mirror (no download needed)"
@@ -553,6 +614,7 @@ class OutputFileSelectorDialog(QDialog):
             tooltip = f"Remote file: {name} (download the job, or open it, to fetch it)"
 
         item = QTreeWidgetItem([filename, size_str, describe_file_type(filename), location])
+        set_row_size(item, size)
         item.setData(0, PATH_ROLE, target_data)
         item.setData(0, IS_REMOTE_ROLE, is_remote)
         item.setToolTip(0, tooltip)
@@ -672,10 +734,9 @@ class OutputFileSelectorDialog(QDialog):
                     row.setData(0, IS_REMOTE_ROLE, False)
                     row.setText(3, "Local")
                     row.setToolTip(0, match)
-                    try:
-                        row.setText(1, format_file_size(os.path.getsize(match)))
-                    except OSError:
-                        row.setText(1, "-")
+                    size = self._bytes_of(match)
+                    set_row_size(row, size)
+                    row.setText(1, "-" if size is None else format_file_size(size))
                     for column in range(4):
                         row.setForeground(column, QBrush())
                     font = row.font(0)

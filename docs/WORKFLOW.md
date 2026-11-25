@@ -948,7 +948,7 @@ transfer finishes, so a download cut off half way never leaves a truncated
 `.out` sitting in your working directory under its real name.
 
 A `.txt` result opens in the plugin's own text window rather than in
-MoleditPy. In **File Browser**, double-click a non-binary file to view its text,
+MoleditPy. In **Job Files** and **File Browser**, double-click a non-binary file to view its text,
 or use **Open in Text Viewer**. The browser and text viewer are modeless, so
 you can keep browsing while reading a file. **Open in MoleditPy** explicitly
 uses the host's file opener and closes the browser. The wider browser keeps its
@@ -971,7 +971,7 @@ cannot be edited, and Save As of an unedited file copies the whole file exactly.
 
 A file's Text Viewer also
 has **Open in MoleditPy**: it passes the original file to the editor and closes
-both the viewer and its originating File Browser. Cancelling or refusing the
+both the viewer and the file list it came from. Cancelling or refusing the
 open leaves both windows open. Plain `.txt` files keep this button disabled to
 avoid OpenBabel treating arbitrary text as molecules. **Ctrl+F** searches the
 text — Enter or F3 for the next match, Shift for
@@ -984,7 +984,7 @@ download at the job's end finishes, which is how ORCA Result Analyzer and the Ga
 up. The box is in the submit wizard, below automatic download. It starts
 unticked unless **Settings → Submit** says otherwise, and is kept with the job,
 so Resubmit and a saved preset carry it. A download you start yourself —
-**Download...**, or opening a file the File Browser has not fetched yet — is
+**Download...**, or opening a file Job Files has not fetched yet — is
 opened only by what you used, never a second time.
 
 Opening a result clears the editor first, so what you are looking at is the
@@ -1018,13 +1018,17 @@ not in the helper, so the next submission starts a fresh helper and takes the
 
 The **File** menu deals with the list as a whole. The toolbar keeps **New Job**,
 **Refresh Now** and **Host Monitor** visible. Selected-job operations are in the
-**Job** menu, **Job Actions** dropdown and the row's context menu; **File Browser**,
+**Job** menu, **Job Actions** dropdown and the row's context menu; **Job Files**,
 **Download**, **Tail Log** and **Details** also have buttons below the table.
-**File Browser** needs no download or mirror: it lists the job's directory on the
+**Job Files** needs no download or mirror: it lists the job's directory on the
 host beside any files already downloaded, and opening a file that is only on the
 host downloads it first. Downloaded files show at once; the host's files join them
 when its listing arrives, and stay out only if the host cannot be reached. **Download** remains the
 way to fetch several files at once or choose a folder.
+In **Job Files** and **File Browser**, folders come first and start closed;
+the folder holding the job's main output is opened for you, and the output
+nearest the job directory is the one picked. Click a column header to sort by
+name, size, type or location, and again to reverse it; folders stay on top.
 Host profiles and preferences are under **Tools ▸ Hosts...** and **Tools ▸ Settings...**.
 On a narrow window, toolbar operations that do not fit are available from the
 arrow at the toolbar's right edge.

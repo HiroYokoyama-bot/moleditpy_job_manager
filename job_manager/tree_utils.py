@@ -48,6 +48,7 @@ def ensure_folder_item(
     folder_factory: Optional[
         Callable[[str, Sequence[str], Optional[QTreeWidgetItem]], QTreeWidgetItem]
     ] = None,
+    expand: bool = True,
 ) -> Optional[QTreeWidgetItem]:
     """Get or create the QTreeWidgetItem for a folder path and its ancestors.
 
@@ -59,7 +60,7 @@ def ensure_folder_item(
     if key in folders:
         return folders[key]
 
-    parent = ensure_folder_item(tree, folders, parts[:-1], folder_factory)
+    parent = ensure_folder_item(tree, folders, parts[:-1], folder_factory, expand)
     factory = folder_factory or default_folder_factory
     item = factory(parts[-1], parts, parent)
 
@@ -67,7 +68,8 @@ def ensure_folder_item(
         tree.addTopLevelItem(item)
     else:
         parent.addChild(item)
-    item.setExpanded(True)
+    if expand:
+        item.setExpanded(True)
     folders[key] = item
     return item
 

@@ -108,6 +108,22 @@ class TestListing(BrowserTestCase):
         self.assertEqual(self.rows(dialog), ["a.txt"])
         self.assertIn(self.host.remote_root, dialog.lbl_headline.text())
 
+    def test_a_folder_read_later_follows_the_chosen_order(self):
+        from PySide6.QtCore import Qt
+
+        self.folders.update({"": ["b.txt", "job1/", "a.txt"], "job1": ["x.out", "y/", "z.out"]})
+        dialog = self.browser()
+
+        def names(parent):
+            return [parent.child(i).text(0) for i in range(parent.childCount())]
+
+        self.assertEqual(names(dialog.tree.invisibleRootItem()), ["job1", "a.txt", "b.txt"])
+        dialog.tree.header().setSortIndicator(0, Qt.SortOrder.DescendingOrder)
+        folder = self.top(dialog, "job1")
+        folder.setExpanded(True)
+        self.assertEqual(names(folder), ["y", "z.out", "x.out"])
+        self.assertTrue(folder.isExpanded())
+
     def test_a_folder_shows_an_arrow_before_it_is_read(self):
         self.folders[""] = ["job1/"]
         folder = self.top(self.browser(), "job1")

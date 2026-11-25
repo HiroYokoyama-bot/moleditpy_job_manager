@@ -64,7 +64,7 @@ def create_job_actions(parent, callbacks):
         ("download", "Download", callbacks["_download_selected"], "Choose results to download."),
         (
             "open",
-            "File Browser",
+            "Job Files",
             callbacks["_open_selected_result"],
             "Browse this job's files, here or on its host, and download and open any of them.",
         ),
