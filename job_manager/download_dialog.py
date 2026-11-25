@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import PLUGIN_VERSION
-from .file_tree import configure_tree, folder_factory, make_filter_row
+from .file_tree import TreeSorter, configure_tree, folder_factory, make_filter_row, reveal
 from .theme import apply_theme, mark_muted
 from .tree_utils import (
     PATH_ROLE,
@@ -99,6 +99,7 @@ class DownloadDialog(QDialog):
         # Drag or shift-click a run of files, ctrl-click to add: the tick boxes
         # are the choice, but nobody wants to click forty of them one at a time.
         self.tree = configure_tree(QTreeWidget(), multi_select=True)
+        self.sorter = TreeSorter(self.tree)
         self.tree.itemDoubleClicked.connect(self._toggle)
         self._build_tree(names, set(matched))
         self.tree.itemChanged.connect(self._on_item_changed)
@@ -149,6 +150,7 @@ class DownloadDialog(QDialog):
         """One item per path segment; files carry their full relative path."""
         folders: Dict[tuple, QTreeWidgetItem] = {}
         checkable_folder = folder_factory(checkable=True)
+        ticked: List[QTreeWidgetItem] = []
 
         for name in names:
             if not name:
@@ -157,7 +159,7 @@ class DownloadDialog(QDialog):
             if not parts:
                 continue
             parent = ensure_folder_item(
-                self.tree, folders, parts[:-1], folder_factory=checkable_folder
+                self.tree, folders, parts[:-1], folder_factory=checkable_folder, expand=False
             )
             item = QTreeWidgetItem(parent) if parent is not None else QTreeWidgetItem(self.tree)
             item.setText(0, parts[-1])
@@ -166,7 +168,13 @@ class DownloadDialog(QDialog):
             item.setCheckState(
                 0, Qt.CheckState.Checked if name in matched else Qt.CheckState.Unchecked
             )
-        self.tree.expandAll()
+            if name in matched:
+                ticked.append(item)
+        self.sorter.sort()
+        # Folders start closed, except where something is already ticked:
+        # a tick out of sight is a download nobody knows they asked for.
+        for item in ticked:
+            reveal(item)
 
     def _apply_filter(self, text: str) -> None:
         """Hide what does not match, keeping every tick exactly as it was.

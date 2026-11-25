@@ -1029,6 +1029,9 @@ In **Job Files** and **File Browser**, folders come first and start closed;
 the folder holding the job's main output is opened for you, and the output
 nearest the job directory is the one picked. Click a column header to sort by
 name, size, type or location, and again to reverse it; folders stay on top.
+**Tail File** and the **Download** chooser list the same way, folders first
+and closed, opening only the folder of the file picked for you or of a ticked
+file; a filter opens every folder with a match.
 Host profiles and preferences are under **Tools ▸ Hosts...** and **Tools ▸ Settings...**.
 On a narrow window, toolbar operations that do not fit are available from the
 arrow at the toolbar's right edge.
