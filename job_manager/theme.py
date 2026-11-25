@@ -81,8 +81,7 @@ QPushButton, QToolButton[jobManagerAction="true"] {{
 /* What a double-click on the selected job runs. Before :hover, so hovering
    and pressing still read the same on every button. */
 QToolButton[jobManagerAction="true"][doubleClickTarget="true"] {{
-    background: rgba(0, 200, 83, 0.07);
-    border-color: rgba(0, 200, 83, 0.35);
+    background: rgba(0, 200, 83, 0.04);
 }}
 
 QPushButton:hover, QToolButton[jobManagerAction="true"]:hover {{

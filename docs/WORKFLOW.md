@@ -1020,7 +1020,7 @@ The **File** menu deals with the list as a whole. The toolbar keeps **New Job**,
 **Refresh Now** and **Host Monitor** visible. Selected-job operations are in the
 **Job** menu, **Job Actions** dropdown and the row's context menu; **Job Files**,
 **Download**, **Log** and **Details** also have buttons below the table.
-**Log** sits at the right end of that row. The button a double-click on the
+**Log** sits at the left end of that row. The button a double-click on the
 selected job would press — **Details** for a waiting job, **Log** for a
 running one, **Job Files** for a finished one — is tinted light green.
 **Job Files** needs no download or mirror: it lists the job's directory on the

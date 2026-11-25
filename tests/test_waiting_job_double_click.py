@@ -61,11 +61,11 @@ class TestWaitingJobDoubleClick(DialogTestCase):
 
 
 class TestLogButtonPlace(DialogTestCase):
-    def test_log_is_the_rightmost_button(self):
+    def test_log_is_the_leftmost_button(self):
         dialog = JobsDialog(self.service)
         self.addCleanup(dialog.deleteLater)
         actions = dialog.job_toolbar.actions()
-        assert actions[-1] is dialog.job_actions["tail"]
+        assert actions[0] is dialog.job_actions["tail"]
         assert dialog.btn_tail.text() == "Log"
         assert dialog.btn_tail.property("jobManagerAction") is True
 
