@@ -96,11 +96,19 @@ class TestTreeSorter(unittest.TestCase):
 
 
 class TestOutputRanking(unittest.TestCase):
-    def test_a_file_nearer_the_job_directory_is_preferred(self):
-        self.assertEqual(primary_output(["steps/opt/calc.out", "final.xyz"]), "final.xyz")
+    def test_the_extension_decides_before_the_depth(self):
+        # An .out or .log in a sub-folder still beats an .xyz at the top.
+        self.assertEqual(primary_output(["steps/opt/calc.out", "final.xyz"]), "steps/opt/calc.out")
+        self.assertEqual(primary_output(["run/CALC.LOG", "geom.xyz"]), "run/CALC.LOG")
+        self.assertEqual(
+            primary_output([r"C:\work\mol.xyz", r"C:\dl\job\run\mol.out"]),
+            r"C:\dl\job\run\mol.out",
+        )
+
+    def test_among_one_extension_the_nearest_the_job_directory_wins(self):
         self.assertEqual(primary_output(["steps/calc.out", "calc.log", "calc.out"]), "calc.out")
         self.assertEqual(
-            likely_outputs(["a/b.out", "a/b/c.out", "d.log"]), ["d.log", "a/b.out", "a/b/c.out"]
+            likely_outputs(["a/b/c.out", "d.log", "a/b.out"]), ["a/b.out", "a/b/c.out", "d.log"]
         )
 
 

@@ -369,8 +369,10 @@ class JobsDialog(QDialog):
     def _build_job_toolbar(self, layout: QVBoxLayout) -> None:
         self.job_toolbar = action_toolbar(
             self,
-            (self.job_actions[key] for key in ("open", "download", "tail_file", "details")),
+            (self.job_actions[key] for key in ("tail", "open", "download", "tail_file", "details")),
         )
+        # Log first, at the left end: it is checked most often while a job runs.
+        self.btn_tail = self.job_toolbar.widgetForAction(self.job_actions["tail"])
         self.btn_open = self.job_toolbar.widgetForAction(self.job_actions["open"])
         self.btn_download = self.job_toolbar.widgetForAction(self.job_actions["download"])
         self.btn_tail_file = self.job_toolbar.widgetForAction(self.job_actions["tail_file"])
@@ -384,11 +386,6 @@ class JobsDialog(QDialog):
         self.btn_job_actions.setMenu(self.menu_job)
         self.btn_job_actions.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.job_toolbar.addWidget(self.btn_job_actions)
-        # At the far right, where it is found without reading the row: the
-        # log is what is checked most often while a job runs.
-        self.job_toolbar.addAction(self.job_actions["tail"])
-        self.btn_tail = self.job_toolbar.widgetForAction(self.job_actions["tail"])
-        self.btn_tail.setProperty("jobManagerAction", True)
         layout.addWidget(self.job_toolbar)
 
     def _connect_service(self) -> None:

@@ -1020,7 +1020,7 @@ The **File** menu deals with the list as a whole. The toolbar keeps **New Job**,
 **Refresh Now** and **Host Monitor** visible. Selected-job operations are in the
 **Job** menu, **Job Actions** dropdown and the row's context menu; **Job Files**,
 **Download**, **Log** and **Details** also have buttons below the table.
-**Log** sits at the right end of that row. The button a double-click on the
+**Log** sits at the left end of that row. The button a double-click on the
 selected job would press — **Details** for a waiting job, **Log** for a
 running one, **Job Files** for a finished one — is tinted light green.
 **Job Files** needs no download or mirror: it lists the job's directory on the
@@ -1029,8 +1029,9 @@ host downloads it first. Downloaded files show at once; the host's files join th
 when its listing arrives, and stay out only if the host cannot be reached. **Download** remains the
 way to fetch several files at once or choose a folder.
 In **Job Files** and **File Browser**, folders come first and start closed;
-the folder holding the job's main output is opened for you, and the output
-nearest the job directory is the one picked. Click a column header to sort by
+the folder holding the job's main output is opened for you. The main output is
+chosen by type first (`.out`, then `.log`, ... `.xyz`), and among files of one
+type the one nearest the job directory. Click a column header to sort by
 name, size, type or location, and again to reverse it; folders stay on top.
 **Tail File** and the **Download** chooser list the same way, folders first
 and closed, opening only the folder of the file picked for you or of a ticked
