@@ -12,6 +12,7 @@ own business, which is why this module holds no dialog of its own.
 
 from __future__ import annotations
 
+import re
 from typing import Callable, Optional, Sequence
 
 from PySide6.QtCore import Qt
@@ -26,6 +27,12 @@ from PySide6.QtWidgets import (
 
 from .tree_utils import PATH_ROLE
 
+_DIGITS = re.compile(r"(\d+)")
+
+#: The size in bytes behind the Size column's text, so "900 KB" sorts below
+#: "1.2 MB". Unknown sizes (a file still on the host) have none.
+SIZE_ROLE = Qt.ItemDataRole.UserRole + 3
+
 #: The same words in all three, so the box is recognised rather than read.
 FILTER_PLACEHOLDER = "Filter files (e.g. .out, .log)"
 
@@ -33,6 +40,97 @@ FILTER_PLACEHOLDER = "Filter files (e.g. .out, .log)"
 #: does not, and shows the name alone rather than a column of dashes.
 FULL_HEADERS = ("File", "Size", "Type", "Where")
 NAME_HEADERS = ("File",)
+
+
+def is_folder_row(item: QTreeWidgetItem) -> bool:
+    return item.data(0, PATH_ROLE) is None
+
+
+def natural_key(text: str) -> tuple:
+    """``step2`` before ``step10``, as a file manager orders them."""
+    return tuple(
+        (0, int(part), "") if part.isdigit() else (1, 0, part)
+        for part in _DIGITS.split(text.lower())
+        if part
+    )
+
+
+def _sort_key(item: QTreeWidgetItem, column: int) -> tuple:
+    name = natural_key(item.text(0))
+    if column == 1:
+        size = item.data(1, SIZE_ROLE)
+        return (-1 if size is None else int(size), name)
+    if column > 0:
+        return (item.text(column).lower(), name)
+    return (name,)
+
+
+def set_row_size(item: QTreeWidgetItem, size: Optional[int]) -> None:
+    item.setData(1, SIZE_ROLE, size)
+
+
+class TreeSorter:
+    """Sorts a file tree by the clicked header, folders always first.
+
+    Qt's own sorting would call a Python ``__lt__`` for every comparison:
+    seconds for a folder of fifty thousand files. Here each row's key is read
+    once, the rows are sorted in Python and put back in that order.
+    """
+
+    def __init__(self, tree: QTreeWidget, on_sorted: Optional[Callable[[], None]] = None):
+        self.tree = tree
+        self.on_sorted = on_sorted
+        header = tree.header()
+        header.setSectionsClickable(True)
+        header.setSortIndicatorShown(True)
+        header.setSortIndicator(0, Qt.SortOrder.AscendingOrder)
+        header.sortIndicatorChanged.connect(lambda *_: self.sort())
+
+    def sort(self, parent: Optional[QTreeWidgetItem] = None) -> None:
+        """Sort everything below ``parent``, or the whole tree."""
+        tree = self.tree
+        top = parent or tree.invisibleRootItem()
+        if top.childCount() == 0:
+            return
+        header = tree.header()
+        column = header.sortIndicatorSection()
+        descending = header.sortIndicatorOrder() == Qt.SortOrder.DescendingOrder
+        # Taking rows out of the tree forgets what the view knew about them.
+        expanded, selected = [], tree.selectedItems()
+        current = tree.currentItem()
+        stack = [top]
+        while stack:
+            item = stack.pop()
+            for row in range(item.childCount()):
+                child = item.child(row)
+                if child.childCount():
+                    stack.append(child)
+                    if child.isExpanded():
+                        expanded.append(child)
+        blocked = tree.blockSignals(True)
+        try:
+            self._sort_children(top, column, descending)
+            for item in expanded:
+                item.setExpanded(True)
+            if current is not None and current.treeWidget() is tree:
+                tree.setCurrentItem(current)
+            for item in selected:
+                item.setSelected(True)
+        finally:
+            tree.blockSignals(blocked)
+        if self.on_sorted is not None:
+            self.on_sorted()
+
+    def _sort_children(self, item: QTreeWidgetItem, column: int, descending: bool) -> None:
+        children = item.takeChildren()
+        folders = [child for child in children if is_folder_row(child)]
+        files = [child for child in children if not is_folder_row(child)]
+        folders.sort(key=lambda row: _sort_key(row, column), reverse=descending)
+        files.sort(key=lambda row: _sort_key(row, column), reverse=descending)
+        item.addChildren(folders + files)
+        for folder in folders:
+            if folder.childCount():
+                self._sort_children(folder, column, descending)
 
 
 def configure_tree(
@@ -99,6 +197,11 @@ def make_filter_row(on_changed: Callable[[str], None]) -> tuple:
 
 __all__ = [
     "FILTER_PLACEHOLDER",
+    "SIZE_ROLE",
+    "TreeSorter",
+    "is_folder_row",
+    "natural_key",
+    "set_row_size",
     "FULL_HEADERS",
     "NAME_HEADERS",
     "configure_tree",

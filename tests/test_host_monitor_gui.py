@@ -617,7 +617,7 @@ class TestTheRowMenu(DialogTestCase):
         self.dialog.selected_job().remote_dir = ""
         self.dialog._update_actions()
         entries = {action.text(): action for action in self.menu_entries()}
-        self.assertFalse(entries["File Browser"].isEnabled())
+        self.assertFalse(entries["Job Files"].isEnabled())
         self.assertTrue(entries["Details"].isEnabled())
 
     def test_it_matches_the_buttons_exactly(self):

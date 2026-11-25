@@ -254,6 +254,7 @@ class HostFileBrowserDialog(OutputFileSelectorDialog):
                 parent.setChildIndicatorPolicy(
                     QTreeWidgetItem.ChildIndicatorPolicy.DontShowIndicatorWhenChildless
                 )
+        self.sorter.sort(parent)
 
         where = path or "the remote root"
         if len(visible) > len(shown):
