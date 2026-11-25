@@ -54,7 +54,7 @@ class TailFileDialog(QDialog):
         self._all_names = list(names)
         #: The wrapper's own log. Kept in the list -- it is a real file on the
         #: host -- but never the one selected for you: this window is for what
-        #: the calculation writes, and the Tail Log button already opens that.
+        #: the calculation writes, and the Log button already opens that.
         self._log_file = log_file
 
         layout = QVBoxLayout(self)

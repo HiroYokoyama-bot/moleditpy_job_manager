@@ -62,7 +62,7 @@ def test_tail_file_dialog_double_click(qapp):
 
 def test_the_wrapper_log_is_not_preselected(qapp):
     # This window is for what the calculation writes; the wrapper's log is what
-    # the Tail Log button already opens. It used to be passed as the default,
+    # the Log button already opens. It used to be passed as the default,
     # so the one file this dialog is not for was the one offered.
     dlg = TailFileDialog("myjob", ["job.log", "mol.out"], log_file="job.log")
 

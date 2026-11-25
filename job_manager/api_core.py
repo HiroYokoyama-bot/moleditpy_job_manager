@@ -516,7 +516,7 @@ class JobApi:
         job = self._job(job_id)
         lines = self._int(query.get("lines"), "lines", minimum=1) if query.get("lines") else 200
         # Empty means the job's own log; tail_file resolves that the same way
-        # the monitor's Tail Log button does.
+        # the monitor's Log button does.
         filename = str(query.get("file", "") or "") or job.log_file
         deferred = Deferred()
         self.service.tail_file(

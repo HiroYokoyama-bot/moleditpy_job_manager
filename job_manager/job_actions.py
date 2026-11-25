@@ -70,7 +70,7 @@ def create_job_actions(parent, callbacks):
         ),
         (
             "tail",
-            "Tail Log",
+            "Log",
             callbacks["_tail_selected"],
             "Read the end of the job's log in a window of its own.",
         ),
