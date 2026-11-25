@@ -1029,8 +1029,9 @@ host downloads it first. Downloaded files show at once; the host's files join th
 when its listing arrives, and stay out only if the host cannot be reached. **Download** remains the
 way to fetch several files at once or choose a folder.
 In **Job Files** and **File Browser**, folders come first and start closed;
-the folder holding the job's main output is opened for you, and the output
-nearest the job directory is the one picked. Click a column header to sort by
+the folder holding the job's main output is opened for you. The main output is
+chosen by type first (`.out`, then `.log`, ... `.xyz`), and among files of one
+type the one nearest the job directory. Click a column header to sort by
 name, size, type or location, and again to reverse it; folders stay on top.
 **Tail File** and the **Download** chooser list the same way, folders first
 and closed, opening only the folder of the file picked for you or of a ticked
