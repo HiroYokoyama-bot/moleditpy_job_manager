@@ -31,6 +31,7 @@ def make_independent(dialog) -> None:
     dialog.setParent(None)
     dialog.setWindowFlags(
         Qt.WindowType.Window
+        | Qt.WindowType.WindowSystemMenuHint
         | Qt.WindowType.WindowMinimizeButtonHint
         | Qt.WindowType.WindowMaximizeButtonHint
         | Qt.WindowType.WindowCloseButtonHint
